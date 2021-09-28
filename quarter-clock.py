@@ -1,6 +1,7 @@
 import picounicorn
 from utime import time, localtime, sleep
 import math
+import random
 import gc
 import rv3028_rtc
 from machine import Pin
@@ -25,13 +26,15 @@ global currentQuarter
 global brt #brightness
 global hr #hour
 global shift #color shift
-global hr12 #24 or 12h clock
+global hr12mode #24 or 12h clock
+global hrdelta #difference in hours from system clock
 
 currentQuarter = 0
 brt = 0.8 #start brightness at one level down
 hr = currentHour
 shift = 0
-hr12 = False
+hr12mode = False
+hrdelta = 0
 
 # using these instead of picounicorn's built in functions to be able to access IRQs
 button_a = Pin(12, Pin.IN, Pin.PULL_UP)
@@ -39,69 +42,16 @@ button_b = Pin(13, Pin.IN, Pin.PULL_UP)
 button_x = Pin(14, Pin.IN, Pin.PULL_UP)
 button_y = Pin(15, Pin.IN, Pin.PULL_UP)
 
-# numbers, used in various dictionaries
-zero = 0
-one = 1
-two = 2
-three = 3
-four = 4
-five = 5
-six = 6
-seven = 7
-eight = 8
-nine = 9
-ten = 10
-eleven = 11
-twelve = 12
-thirteen = 13
-fourteen = 14
-fifteen = 15
-sixteen = 16
-seventeen = 17
-eighteen = 18
-nineteen = 19
-twenty = 20
-twentyone = 21
-twentytwo = 22
-twentythree = 23
-hh = 30 #for custom "h" letter
+#TODO: turn all these into one function call, and then use button X to change themes
+standard_theme_hue = [323, 330, 340, 350, 0, 17, 28, 40, 60, 98, 150, 170, 180, 190, 198, 225, 215, 242, 242, 270, 290, 305, 312]
+standard_theme_sat = [0.81, 0.84, 0.85, 0.9, 0.73, 0.80, 0.68, 0.65, 0.55, 0.85, 0.93, 0.95, 0.40, 0.71, 0.65, 0.40, 0.71, 0.53, 0.89, 0.73, 0.89, 0.89, 0.89]
+#another_theme_hue
+#another_theme_sat
 
-# make a dictionary for digits 0 - 9, to map to the coordinates of pixels to draw each digit
-digits = {}
-
-# make a dictionary of hours, used to set specific colors to specific hours
-hours = {}
-
-# expressed in hsv Hue degrees
-# did this because i'm a control freak and using even 15 degree increments programatically felt unbalanced toward green
-# could put these values in an array, but easier to edit and see when individually assigned like this
-hours[zero] = 310
-hours[one] = 320
-hours[two] = 330
-hours[three] = 340
-hours[four] = 350
-hours[five] = 0
-hours[six] = 15
-hours[seven] = 20
-hours[eight] = 30
-hours[nine] = 35
-hours[ten] = 40
-hours[eleven] = 50
-hours[twelve] = 60
-hours[thirteen] = 90
-hours[fourteen] = 150
-hours[fifteen] = 170
-hours[sixteen] = 190
-hours[seventeen] = 200
-hours[eighteen] = 215
-hours[nineteen] = 225
-hours[twenty] = 265
-hours[twentyone] = 285
-hours[twentytwo] = 300
-hours[twentythree] = 305
+digits = [None] * 11
 
 # position coordinates from top left of the number
-digits[zero] = [
+digits[0] = [
 [0,0],[1,0],[2,0],
 [0,1],      [2,1],
 [0,2],      [2,2],
@@ -111,7 +61,7 @@ digits[zero] = [
 [0,6],[1,6],[2,6]
 ]
 
-digits[one] = [
+digits[1] = [
             [2,0],
       [1,1],[2,1],
 [0,2],      [2,2],
@@ -121,7 +71,7 @@ digits[one] = [
             [2,6]
 ]
 
-digits[two] = [
+digits[2] = [
 [0,0],[1,0],[2,0],
             [2,1],
             [2,2],
@@ -131,7 +81,7 @@ digits[two] = [
 [0,6],[1,6],[2,6]
 ]
 
-digits[three] = [
+digits[3] = [
 [0,0],[1,0],[2,0],
             [2,1],
             [2,2],
@@ -141,7 +91,7 @@ digits[three] = [
 [0,6],[1,6],[2,6]
 ]
 
-digits[four] = [
+digits[4] = [
 [0,0],      [2,0],
 [0,1],      [2,1],
 [0,2],      [2,2],
@@ -151,7 +101,7 @@ digits[four] = [
             [2,6]
 ]
 
-digits[five] = [
+digits[5] = [
 [0,0],[1,0],[2,0],
 [0,1],
 [0,2],
@@ -161,7 +111,7 @@ digits[five] = [
 [0,6],[1,6],[2,6]
 ]
 
-digits[six] = [
+digits[6] = [
 [0,0],[1,0],
 [0,1],
 [0,2],
@@ -171,7 +121,7 @@ digits[six] = [
 [0,6],[1,6],[2,6]
 ]
 
-digits[seven] = [
+digits[7] = [
 [0,0],[1,0],[2,0],
             [2,1],
             [2,2],
@@ -181,7 +131,7 @@ digits[seven] = [
             [2,6]
 ]
 
-digits[eight] = [
+digits[8] = [
 [0,0],[1,0],[2,0],
 [0,1],      [2,1],
 [0,2],      [2,2],
@@ -191,7 +141,7 @@ digits[eight] = [
 [0,6],[1,6],[2,6]
 ]
 
-digits[nine] = [
+digits[9] = [
 [0,0],[1,0],[2,0],
 [0,1],      [2,1],
 [0,2],      [2,2],
@@ -201,7 +151,7 @@ digits[nine] = [
             [2,6]
 ]
 
-digits[hh] = [
+digits[10] = [
 [0,0],
 [0,1],
 [0,2],
@@ -211,19 +161,18 @@ digits[hh] = [
 [0,6],      [2,6]
 ]
 
-def Digit(num, offset, erase=False):
+def Digit(num, offset):
     for i in range(len(num)):
         x = num[i][0]        
         y = num[i][1]
         
-        localhue = ColorShift(hours[hr], 10)
-        localbrightness = VB(255, 50)
-        
-        if erase:
-            localbrightness = 0
+        #localhue = ColorShift(hours[hr][0], 10)
+        localhue = standard_theme_hue[hr]
+        localsat = standard_theme_sat[hr]
+        localvalue = VB(255, 50)
         
         #shift position over by an offset number and draw pixels          
-        picounicorn.set_pixel(x + offset, y, *Rainbow(localhue, localbrightness))
+        picounicorn.set_pixel(x + offset, y, *Rainbow(localhue, localsat, localvalue))
 
             
 def ClearDisplay():
@@ -232,18 +181,25 @@ def ClearDisplay():
             #draws "black" pixels
             picounicorn.set_pixel(x, y, 0, 0, 0)
             
-def Pillar(width, offset, localbrightness, height=h, localhue=hours[hr], hueshift=0):
-    localhue = localhue + hueshift
+def Pillar(width, offset, localvalue, height=h, localhue=standard_theme_hue[hr], localsat=standard_theme_sat[hr]):
     for x in range(width):
         for y in range(height):
-            picounicorn.set_pixel(x + offset, y, *Rainbow(localhue, localbrightness))
+            picounicorn.set_pixel(x + offset, y, *Rainbow(localhue, localsat, localvalue))
 
-def Rainbow(localhue, localvalue):
+def Rainbow(hue, sat, val):
+    #hu is 0-360, sa is 0.0-1.0 and va is 0-255
     global shift
-    localhue = (localhue + shift)%359
-    localhue = (localhue)/360
-    r, g, b = [int(c * 255) for c in hsv_to_rgb(localhue, 1.0, localvalue/255)]
+    hue = (hue + shift)%359
+    hue = (hue)/360
+    sat = sat
+    
+    #TODO: change all value and VB calls to be 0.0-1.0 range instead of 0-255, then remove this division
+    val = val/255
+    r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, sat, val)]
     return (r, g, b)
+
+def TogglePalette():
+    print('toggle palette')
 
 def ColorShift(color, delta=10):
     adj = color + delta
@@ -261,6 +217,7 @@ def Brightness(default=False):
     sleep(0.1)
 
 def VB(value, minimum=0):
+    # variable brightness
     value = value * brt
 
     if value < minimum:
@@ -273,9 +230,11 @@ def Pulse():
     
     #TODO: maybe replace this with a function, it's used three times kind of
     if hr == 23:
-        forwardhue = hours[0]
+        forwardhue = standard_theme_hue[0]
+        forwardsat = standard_theme_sat[0]
     else:
-        forwardhue = hours[hr+1]
+        forwardhue = standard_theme_hue[hr+1]
+        forwardsat = standard_theme_sat[hr+1]
     
     
     #TODO: continue working on this to optimize
@@ -297,10 +256,10 @@ def Pulse():
         localOffset = (currentSecond%6)+quarterOffsets[0]
         
     for i in range(VB(50,25), VB(210, 120), 25):
-        Pillar(1, localOffset, i, localhue=forwardhue, hueshift=20)
+        Pillar(1, localOffset, i, localhue=forwardhue, localsat=forwardsat)
         sleep(0.05)
     for i in reversed(range(VB(50,25), VB(210, 120), 25)):
-        Pillar(1, localOffset, i, localhue=forwardhue, hueshift=20)
+        Pillar(1, localOffset, i, localhue=forwardhue, localsat=forwardsat)
         sleep(0.05)
 
 def DisplayQuarters():
@@ -310,9 +269,11 @@ def DisplayQuarters():
     
     #TODO: replace
     if hr == 23:
-        forwardhue = hours[0]
+        forwardhue = standard_theme_hue[0]
+        forwardsat = standard_theme_sat[0]
     else:
-        forwardhue = hours[hr+1]
+        forwardhue = standard_theme_hue[hr+1]
+        forwardsat = standard_theme_sat[hr+1]
     
     # check which quarter we are in
     if currentMinute <= 13 or currentMinute == 59:
@@ -341,58 +302,68 @@ def DisplayQuarters():
                 # animation for blink/fade each minute
                 print('minute blink')
                 for desc in reversed(range(VB(34,0), VB(204, 100), 17)):  
-                    Pillar(2, quarterOffsets[i], desc, localhue=forwardhue, hueshift=20)
+                    Pillar(2, quarterOffsets[i], desc, localhue=forwardhue, localsat=forwardsat)
                     sleep(0.02)
                 for asc in range(VB(34,0), VB(204, 100), 17):  
-                    Pillar(2, quarterOffsets[i], asc, localhue=forwardhue, hueshift=20)
+                    Pillar(2, quarterOffsets[i], asc, localhue=forwardhue, localsat=forwardsat)
                     sleep(0.02)
                     
-                Pillar(2, quarterOffsets[i], VB(240, 80), localhue=forwardhue, hueshift=20)
+                Pillar(2, quarterOffsets[i], VB(240, 80), localhue=forwardhue, localsat=forwardsat)
                 
             # animate for each quarter change
             if flux == True:
                 
                 if i > 0:
-                    Pillar(2, quarterOffsets[i - 1], VB(240, 80), localhue=forwardhue, hueshift=20)
+                    Pillar(2, quarterOffsets[i - 1], VB(240, 80), localhue=forwardhue, localsat=forwardsat)
                     
                     # animate off previous quarter
                     print('previous quarter off')
                     for off in range(h):
-                        Pillar(2, quarterOffsets[i - 1], 0, off + 1, localhue=forwardhue, hueshift=20)
+                        Pillar(2, quarterOffsets[i - 1], 0, off + 1, localhue=forwardhue, localsat=forwardsat)
                         sleep(0.03)
                     # replace the emptiness with faded quarter
-                    Pillar(2, quarterOffsets[i - 1], VB(50, 25), localhue=forwardhue, hueshift=20)
+                    Pillar(2, quarterOffsets[i - 1], VB(50, 25), localhue=forwardhue, localsat=forwardsat,)
                     
                      #animate next quarter over
                     print('next quarter on')
                     for on in range(h):
-                        Pillar(2, quarterOffsets[i], VB(240, 80), on + 1, localhue=forwardhue, hueshift=20)
+                        Pillar(2, quarterOffsets[i], VB(240, 80), on + 1, localhue=forwardhue, localsat=forwardsat,)
                         sleep(0.03)
-                    Pillar(2, quarterOffsets[i], VB(240, 80), localhue=forwardhue, hueshift=20)
+                    Pillar(2, quarterOffsets[i], VB(240, 80), localhue=forwardhue, localsat=forwardsat)
                 else:
                     # animate off previous quarter
                     print('previous quarter off')
                     for off in range(h):
-                        Pillar(2, quarterOffsets[3], 0, off + 1, localhue=forwardhue, hueshift=20)
+                        Pillar(2, quarterOffsets[3], 0, off + 1, localhue=forwardhue, localsat=forwardsat)
                         sleep(0.03)
                     # replace the emptiness with faded quarter
-                    Pillar(2, quarterOffsets[3], VB(50, 25), localhue=forwardhue, hueshift=20)
+                    Pillar(2, quarterOffsets[3], VB(50, 25), localhue=forwardhue, localsat=forwardsat)
                     
                     # otherwise, animate the first quarter   
                     print('next quarter on')
                     for on in range(h):
-                        Pillar(2, quarterOffsets[0], VB(240, 80), on + 1, localhue=forwardhue, hueshift=20)
+                        Pillar(2, quarterOffsets[0], VB(240, 80), on + 1, localhue=forwardhue, localsat=forwardsat)
                         sleep(0.03)
-                    Pillar(2, quarterOffsets[0], VB(240, 80), localhue=forwardhue, hueshift=20)
+                    Pillar(2, quarterOffsets[0], VB(240, 80), localhue=forwardhue, localsat=forwardsat)
         
         # for the other 3 faded quarters
         else:
-            Pillar(2, quarterOffsets[i], VB(50, 25), localhue=forwardhue, hueshift=20)
+            Pillar(2, quarterOffsets[i], VB(50, 25), localhue=forwardhue, localsat=forwardsat)
         
 def DisplayHours():
     # display main digits
     Digit(digits[HourFormat()[0]], 0)
     Digit(digits[HourFormat()[1]], 4)
+    
+def HourDelta():
+    global hrdelta
+    hrdelta = hrdelta + 1
+    if hrdelta > 23:
+        hrdelta = 0
+        
+def ToggleHR12Mode():
+    global hr12mode
+    hr12mode = not hr12mode
             
 def HourTransition():
     # animation when changing hours
@@ -416,19 +387,19 @@ def HourTransition():
 
 def HourFormat():
     global hr
+    global hrdelta
     
-    # resets the hour if it goes above 23 during user time setting
-    # TODO: replace
-    if hr > 23:
-        hr = 0
-    
-    localhour = hr
+    localhour = hr + hrdelta
     
     #format properly if 12h clock being used
-    if hr12 == True:
+    if hr12mode == True:
         localhour = localhour%12
         if localhour == 0:
             localhour = 12
+            
+    # resets the hour if it goes above 23 during user time setting
+    if localhour > 23:
+        localhour = localhour%24
     
     # formats the two-digit hours into two single-digit numbers
     if localhour < 10:
@@ -472,12 +443,13 @@ def callback_button_a(pin):
     elif not d:
         #TODO: try threading Event before giving up on optimizing this
         exitLoop = False
+        youwin = False
         sleep(0.5)
         while not exitLoop:
             for i in range(16):
                 
                 #TODO: use Rainbow() here?
-                hue = (hours[i])/360
+                hue = (standard_theme_hue[i])/360
                 r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, 1.0, 0.8)]
                 
                 for x in range(w):
@@ -486,13 +458,16 @@ def callback_button_a(pin):
                 sleep(0.01)
                 
                 if picounicorn.is_pressed(picounicorn.BUTTON_A):
+                    # if you stop the bar in the very center you win
+                    if i == 8:
+                        youwin = True           
                     exitLoop = True
                     break
                 
             for i in range(16):
                 
                 #TODO: use Rainbow() here?
-                hue = (hours[i])/360
+                hue = (standard_theme_hue[i])/360
                 r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, 1.0, 0.8)]
                 
                 for x in range(w):
@@ -500,11 +475,31 @@ def callback_button_a(pin):
                         picounicorn.set_pixel(15-i, y, r, g, b)
                 sleep(0.01)
                 
+                #TODO: move this and the above to a single for loop of 32 to optimize
                 if picounicorn.is_pressed(picounicorn.BUTTON_A):
+                    # if you stop the bar in the very center you win
+                    if i == 8:
+                        youwin = True
                     exitLoop = True
                     break
                 
             sleep(0.5)
+        if youwin == True:
+
+            # celebrate, you win! ... an animation
+            for f in range(20): #flashing
+                
+                for a in range(16): #color changes
+                    #TODO: use Rainbow() here?
+                    hue = (f + (a*random.randint(4,8)))/360
+                    sat = random.randint(0,100)/100
+                    val = random.randint(0,10)/10
+                    r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, sat, val)]
+                    for x in range(w):
+                        for y in range(h):
+                            picounicorn.set_pixel(a, random.randint(0,6), r, g, b)
+                    sleep(0.005)
+                sleep(0.04)
         Reset()
 
 def callback_button_b(pin):
@@ -521,8 +516,7 @@ def callback_button_b(pin):
                
                # if held for 3 sec, toggle time between 12/24h
                if t == 30:
-                global hr12
-                hr12 = not hr12
+                ToggleHR12Mode()
                 
                 ClearDisplay()
                 
@@ -534,7 +528,7 @@ def callback_button_b(pin):
                         sleep(0.1)
                         Digit(digits[1], 0)
                         Digit(digits[2], 4)
-                        Digit(digits[hh], 8)
+                        Digit(digits[10], 8)
                         sleep(0.2)
                         
                 else:
@@ -544,12 +538,12 @@ def callback_button_b(pin):
                         sleep(0.1)
                         Digit(digits[2], 0)
                         Digit(digits[4], 4)
-                        Digit(digits[hh], 8)
+                        Digit(digits[10], 8)
                         sleep(0.2)
                         
                 Reset()
             
-            # otherwise, change brightness
+            # otherwise, button changes brightness down by 1 level, of 5, then loops around
             else:
                 Brightness()
                 break
@@ -563,7 +557,7 @@ def callback_button_x(pin):
         return
     elif not d:
         global shift
-        shift = ColorShift(shift, 20)
+        #shift = ColorShift(shift, 20)
         Reset()
 
 def callback_button_y(pin):
@@ -573,9 +567,8 @@ def callback_button_y(pin):
     if d == None:
         return
     elif not d:
-        global hr
         sleep(0.5)
-        hr = hr + 1    
+        HourDelta()
         Reset()
     
 # i didn't write this function, but it helps prevent double button presses
@@ -602,10 +595,20 @@ Brightness(True)
 HourTransition()
 Reset()
 
-
 while True:
     gc.collect()
     #print('Mem free: {} --- Mem allocated: {}'.format(gc.mem_free(), gc.mem_alloc()))
+    
+#     for i in range(len(standard_theme_hue)):
+#         localhue = standard_theme_hue[i]
+#         localsat = standard_theme_sat[i]
+#         
+#         print(i+1)
+#         
+#         for x in range(w):
+#             for y in range(h):
+#                 picounicorn.set_pixel(x, y, *Rainbow(localhue, localsat, 255))
+#         sleep(0.2)
 
     # runs once per second
     if currentSecond != rtc.get_seconds():
@@ -624,7 +627,6 @@ while True:
         if rtc.get_hours() != currentHour:
             currentHour = rtc.get_hours()
             
-            #TODO: replace
             hr = hr + 1
             
             HourTransition()
@@ -635,3 +637,18 @@ while True:
         gc.collect()
     else:
         pass
+
+#cool color fading chill animation to use for later
+# for r in range(2): #do it twice
+#     for f in range(10): #flashing
+#         
+#         #ClearDisplay()
+#         for a in range(16): #color changes
+#             #TODO: use Rainbow() here?
+#             hue = (hours[f] + (a*2))/360
+#             r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, a/15, 0.8)]
+#             for x in range(w):
+#                 for y in range(h):
+#                     picounicorn.set_pixel(a, y, r, g, b)
+#             sleep(0.1)
+        sleep(0.2)
