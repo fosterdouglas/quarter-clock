@@ -1,24 +1,29 @@
 import picounicorn
 from utime import time, localtime, sleep
 import math
+import rv3028_rtc
 
 picounicorn.init()
 
-#everywhere in this program X is refering to the physical X axis of the
-#device, not the X axis of the coordinates system. same for Y. everything is
-#written to adjust for this, for some semblence of mental coherence
+w = picounicorn.get_width()
+h = picounicorn.get_height()
 
-#reversed h/w for vertical orientation
-h = picounicorn.get_width()
-w = picounicorn.get_height()
+#initalize the RV3028 RTC unit
+sda=machine.Pin(26)
+scl=machine.Pin(27)
+i2c=machine.I2C(1,sda=sda, scl=scl, freq=400000)
+rtc=rv3028_rtc.RV3028(0x52, i2c, "LSM")
 
-blockHeight = 2
-numberHeight = 5
+#one-time setup to give RV3028 the correct time
+#date_time = (localtime()[0],localtime()[1],localtime()[2],localtime()[3],localtime()[4],localtime()[5],"mon")
+#rtc.set_rtc_date_time(date_time)
+#print("time calibrated?")
+
 blink = False
 
-hoursDelta = 0
-minutesDelta = 0
-secondsDelta = 0
+currentSecond = rtc.get_seconds()
+currentMinute =  rtc.get_minutes()
+currentHour = rtc.get_hours()
 
 blue = (0, 140, 140)
 green = (40, 200, 20)
@@ -43,55 +48,69 @@ digits[zero] = [
 [0,1],      [2,1],
 [0,2],      [2,2],
 [0,3],      [2,3],
-[0,4],[1,4],[2,4]
+[0,4],      [2,4],
+[0,5],      [2,5],
+[0,6],[1,6],[2,6]
 ]
 
 digits[one] = [
-      [1,0],
-[0,1],[1,1],
-      [1,2],
-      [1,3],
-[0,4],[1,4],[2,4]
+            [2,0],
+      [1,1],[2,1],
+[0,2],      [2,2],
+            [2,3],
+            [2,4],
+            [2,5],
+            [2,6]
 ]
 
 digits[two] = [
 [0,0],[1,0],[2,0],
             [2,1],
-[0,2],[1,2],[2,2],
-[0,3],
-[0,4],[1,4],[2,4]
+            [2,2],
+[0,3],[1,3],[2,3],
+[0,4],
+[0,5],
+[0,6],[1,6],[2,6]
 ]
 
 digits[three] = [
 [0,0],[1,0],[2,0],
             [2,1],
-      [1,2],[2,2],
-            [2,3],
-[0,4],[1,4],[2,4]
+            [2,2],
+[0,3],[1,3],[2,3],
+            [2,4],
+            [2,5],
+[0,6],[1,6],[2,6]
 ]
 
 digits[four] = [
 [0,0],      [2,0],
 [0,1],      [2,1],
-[0,2],[1,2],[2,2],
-            [2,3],
-            [2,4]
+[0,2],      [2,2],
+[0,3],[1,3],[2,3],
+            [2,4],
+            [2,5],
+            [2,6]
 ]
 
 digits[five] = [
 [0,0],[1,0],[2,0],
 [0,1],
-[0,2],[1,2],[2,2],
-            [2,3],
-[0,4],[1,4],[2,4]
+[0,2],
+[0,3],[1,3],[2,3],
+            [2,4],
+            [2,5],
+[0,6],[1,6],[2,6]
 ]
 
 digits[six] = [
-[0,0],
+[0,0],[1,0],
 [0,1],
-[0,2],[1,2],[2,2],
-[0,3],      [2,3],
-[0,4],[1,4],[2,4]
+[0,2],
+[0,3],[1,3],[2,3],
+[0,4],      [2,4],
+[0,5],      [2,5],
+[0,6],[1,6],[2,6]
 ]
 
 digits[seven] = [
@@ -99,47 +118,46 @@ digits[seven] = [
             [2,1],
             [2,2],
             [2,3],
-            [2,4]
+            [2,4],
+            [2,5],
+            [2,6]
 ]
 
 digits[eight] = [
 [0,0],[1,0],[2,0],
 [0,1],      [2,1],
-[0,2],[1,2],[2,2],
-[0,3],      [2,3],
-[0,4],[1,4],[2,4]
+[0,2],      [2,2],
+[0,3],[1,3],[2,3],
+[0,4],      [2,4],
+[0,5],      [2,5],
+[0,6],[1,6],[2,6]
 ]
 
 digits[nine] = [
 [0,0],[1,0],[2,0],
 [0,1],      [2,1],
-[0,2],[1,2],[2,2],
-            [2,3],
-            [2,4]
+[0,2],      [2,2],
+[0,3],[1,3],[2,3],
+            [2,4],
+            [2,5],
+            [2,6]
 ]
 
-def Digit(num, digit):
+def Digit(num, offset):
     for i in range(len(num)):
-        x = num[i][0]
-        
-        #stupid, but numbers require reflections because of coordinate system
-        if num[i][0] == 2:
-            x = x - 2
-        if num[i][0] == 0:
-            x = x + 2
-        
+        x = num[i][0]        
         y = num[i][1]
         
-        if digit == 0:
-            x = x + 4 #shift position over to the left if its first digit
+        #shift position over by an offset number
+        x = x + offset
             
-        picounicorn.set_pixel(y,x,200, 200, 200)
+        picounicorn.set_pixel(x,y,200, 200, 200)
 
             
 def ClearDisplay():
-    for y in range(h):
-        for x in range(w):
-            picounicorn.set_pixel(y, x, 0, 0, 0)
+    for x in range(w):
+        for y in range(h):
+            picounicorn.set_pixel(x, y, 0, 0, 0)
             
 def Blink(pos, r, g, b):
     
@@ -158,76 +176,89 @@ def GetBlinkRow():
         return 13
 
 
+#on startup, clear any past display memory
+ClearDisplay()
 
 while True:
-    currentSecond = localtime(time())[5]
-    currentMinute = localtime(time())[4]
-    currentHour = localtime(time())[3]
-    
+    sleep(0.001)
+    #print(rtc.get_seconds(), rtc.get_minutes(), rtc.get_hours())
     #only run one per second
-    if secondsDelta != currentSecond:
+    if currentSecond != rtc.get_seconds():
+        ClearDisplay() 
         
-        GetBlinkRow()
+        print(currentSecond, currentMinute, currentHour)
         
-        if math.floor(currentSecond / 15) % 2 == 0:
-            blinkR = 30
-            blinkG = 30
-            blinkB = 30
-        if math.floor(currentSecond / 15) % 2 == 1:
-            blinkR = 0
-            blinkG = 0
-            blinkB = 0
-
-        Blink([abs((currentSecond % (w-2)) - 5), GetBlinkRow()], blinkR, blinkG, blinkB)
+#         GetBlinkRow()
+#         
+#         if math.floor(currentSecond / 15) % 2 == 0:
+#             blinkR = 30
+#             blinkG = 30
+#             blinkB = 30
+#         if math.floor(currentSecond / 15) % 2 == 1:
+#             blinkR = 0
+#             blinkG = 0
+#             blinkB = 0
+# 
+#         Blink([abs((currentSecond % (h-2)) - 5), GetBlinkRow()], blinkR, blinkG, blinkB)
         
         print(str(currentSecond) + "s")
+        
+        currentSecond = rtc.get_seconds()
                 
-        if minutesDelta != currentMinute:
+        if rtc.get_minutes() != currentMinute:
             print(str(currentMinute) + 'm')
+            
+            currentMinute = rtc.get_minutes()
         
         #display minute "group" lines
-        for x in range(w):
-            picounicorn.set_pixel(6, x, *blue)
-            
-            if currentMinute < 15:
-                picounicorn.set_pixel(6, abs((currentMinute % w) - 6), *green)
-            
-            if currentMinute > 14:
-                picounicorn.set_pixel(9, x, *blue)
-                
-                if currentMinute < 29:
-                    picounicorn.set_pixel(9, abs(((currentMinute + 1) % w) - 6), *green)
-                
-            if currentMinute > 29:
-                picounicorn.set_pixel(12, x, *blue)
-                
-                if currentMinute < 44:
-                    picounicorn.set_pixel(12, abs(((currentMinute - 1) % w) - 6), *green)
-            if currentMinute > 44:
-                picounicorn.set_pixel(15, x, *blue)
-                
-                if currentMinute < 59:
-                    picounicorn.set_pixel(15, abs(((currentMinute - 1) % w) - 6), *green)
+#         for x in range(w):
+#             picounicorn.set_pixel(x, 6, *blue)
+#             
+#             if currentMinute < 15:
+#                 picounicorn.set_pixel(abs((currentMinute % w) - 6), 6, *green)
+#             
+#             if currentMinute > 14:
+#                 picounicorn.set_pixel(x, 9, *blue)
+#                 
+#                 if currentMinute < 29:
+#                     picounicorn.set_pixel(abs(((currentMinute + 1) % w) - 6), 9, *green)
+#                 
+#             if currentMinute > 29:
+#                 picounicorn.set_pixel(x, 12, *blue)
+#                 
+#                 if currentMinute < 44:
+#                     picounicorn.set_pixel(abs(((currentMinute - 1) % w) - 6), 12, *green)
+#             if currentMinute > 44:
+#                 picounicorn.set_pixel(x, 15, *blue)
+#                 
+#                 if currentMinute < 59:
+#                     picounicorn.set_pixel(abs(((currentMinute - 1) % w) - 6), 15, *green)
         
-        if hoursDelta != currentHour:
+        if rtc.get_hours() != currentHour:
             #clear display for new hour digits
             ClearDisplay()
             print(str(currentHour) + 'h')
-        
-        hoursDelta = currentHour
-        minutesDelta = currentMinute
-        secondsDelta = currentSecond
+            
+            currentHour = rtc.get_hours()
+
+            
+        #just to test
+        thirdDigit = math.floor(currentSecond / 10)
+        forthDigit = math.floor(currentSecond % 10)
+        Digit(digits[thirdDigit], 9)
+        Digit(digits[forthDigit], 13)
         
         #display main digits
         if currentHour < 10:        
             firstDigit = 0
             secondDigit = currentHour
             Digit(digits[firstDigit], 0)
-            Digit(digits[secondDigit], 1)
+            Digit(digits[secondDigit], 4)
+                 
         else:        
             firstDigit = math.floor(currentHour / 10)
             secondDigit = math.floor(currentHour % 10)
             Digit(digits[firstDigit], 0)
-            Digit(digits[secondDigit], 1)
+            Digit(digits[secondDigit], 4)
     
     
