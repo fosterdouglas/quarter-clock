@@ -20,6 +20,10 @@ hoursDelta = 0
 minutesDelta = 0
 secondsDelta = 0
 
+blue = (0, 140, 140)
+green = (40, 200, 20)
+white = (140, 140, 140)
+
 #make a dictionary of numbers
 digits = {}
 zero = 0
@@ -137,29 +141,21 @@ def ClearDisplay():
         for x in range(w):
             picounicorn.set_pixel(y, x, 0, 0, 0)
             
-def Blink(pos, r=30, g=30, b=30):
+def Blink(pos, r, g, b):
     
     #position coordinates from top right of device
     for i in range(len(pos)):
         picounicorn.set_pixel(pos[1],pos[0],r, g, b)
         
-def SetBlinkRow():
-    if currentSecond <= 6:
-        return 6
-    if currentSecond > 6 and currentSecond <= 13:
-        return 9
-    if currentSecond > 13 and currentSecond <= 20:
-        return 12
-    if currentSecond > 20 and currentSecond <= 27:
-        return 15
-    if currentSecond > 27 and currentSecond <= 34:
-        return 6
-    if currentSecond > 34 and currentSecond <= 41:
-        return 9
-    if currentSecond > 41 and currentSecond <= 48:
-        return 12
-    if currentSecond > 48 and currentSecond <= 55:
-        return 15
+def GetBlinkRow():
+    currentRow = math.floor(currentSecond / 5)
+        
+    if currentRow % 3 == 0:
+        return 7
+    if currentRow % 3 == 1:
+        return 10
+    if currentRow % 3 == 2:
+        return 13
 
 
 
@@ -168,80 +164,70 @@ while True:
     currentMinute = localtime(time())[4]
     currentHour = localtime(time())[3]
     
-    SetBlinkRow()
-    
-    if secondsDelta != currentSecond and currentSecond == 0:
-        for x in range(w):
-            picounicorn.set_pixel_value(15, x, 0)
-            picounicorn.set_pixel_value(12, x, 0)
-            picounicorn.set_pixel_value(9, x, 0)
-            picounicorn.set_pixel_value(6, x, 0)
-    
-    if secondsDelta != currentSecond and currentSecond < 56:
-        #first 55 seconds
-        if currentSecond < 28:
+    #only run one per second
+    if secondsDelta != currentSecond:
+        
+        GetBlinkRow()
+        
+        if math.floor(currentSecond / 15) % 2 == 0:
             blinkR = 30
             blinkG = 30
             blinkB = 30
-        else:
+        if math.floor(currentSecond / 15) % 2 == 1:
             blinkR = 0
             blinkG = 0
             blinkB = 0
-        Blink([abs((currentSecond % 7) - 6), GetBlinkRow()], blinkR, blinkG, blinkB)
-        print(str(currentSecond) + "s")
+
+        Blink([abs((currentSecond % (w-2)) - 5), GetBlinkRow()], blinkR, blinkG, blinkB)
         
-    if secondsDelta != currentSecond and currentSecond >= 56:
-        #final 4 seconds
-        if currentSecond % 4 == 0:
-            for x in range(w):
-                picounicorn.set_pixel_value(15, x, 30)
-            print(str(currentSecond) + "s")
-        if currentSecond % 4 == 1:
-            for x in range(w):
-                picounicorn.set_pixel_value(12, x, 30)
-            print(str(currentSecond) + "s")
-        if currentSecond % 4 == 2:
-            for x in range(w):
-                picounicorn.set_pixel_value(9, x, 30)
-            print(str(currentSecond) + "s")
-        if currentSecond % 4 == 3:
-            for x in range(w):
-                picounicorn.set_pixel_value(6, x, 30)
-            print(str(currentSecond) + "s")
+        print(str(currentSecond) + "s")
+                
+        if minutesDelta != currentMinute:
+            print(str(currentMinute) + 'm')
+        
+        #display minute "group" lines
+        for x in range(w):
+            picounicorn.set_pixel(6, x, *blue)
             
-    if minutesDelta != currentMinute:
-        print(str(currentMinute) + 'm')
-    
-    if currentMinute > 15:
-        for x in range(w):
-            picounicorn.set_pixel(7, x, 0, 170, 170)
-            picounicorn.set_pixel(8, x, 0, 170, 170)
-    if currentMinute > 29:
-        for x in range(w):
-            picounicorn.set_pixel(10, x, 0, 170, 170)
-            picounicorn.set_pixel(11, x, 0, 170, 170)
-    if currentMinute > 44:
-        for x in range(w):
-            picounicorn.set_pixel(13, x, 0, 170, 170)
-            picounicorn.set_pixel(14, x, 0, 170, 170)
-    
-    if hoursDelta != currentHour:
-        ClearDisplay()
-        print(str(currentHour) + 'h')
-    
-    hoursDelta = currentHour
-    minutesDelta = currentMinute
-    secondsDelta = currentSecond
-    
-    if currentHour < 10:        
-        firstDigit = 0
-        secondDigit = currentHour
-        Digit(digits[firstDigit], 0)
-        Digit(digits[secondDigit], 1)
-    else:        
-        firstDigit = math.floor(currentHour / 10)
-        secondDigit = math.floor(currentHour % 10)
-        Digit(digits[firstDigit], 0)
-        Digit(digits[secondDigit], 1)
+            if currentMinute < 15:
+                picounicorn.set_pixel(6, abs((currentMinute % w) - 6), *green)
+            
+            if currentMinute > 14:
+                picounicorn.set_pixel(9, x, *blue)
+                
+                if currentMinute < 29:
+                    picounicorn.set_pixel(9, abs(((currentMinute + 1) % w) - 6), *green)
+                
+            if currentMinute > 29:
+                picounicorn.set_pixel(12, x, *blue)
+                
+                if currentMinute < 44:
+                    picounicorn.set_pixel(12, abs(((currentMinute - 1) % w) - 6), *green)
+            if currentMinute > 44:
+                picounicorn.set_pixel(15, x, *blue)
+                
+                if currentMinute < 59:
+                    picounicorn.set_pixel(15, abs(((currentMinute - 1) % w) - 6), *green)
+        
+        if hoursDelta != currentHour:
+            #clear display for new hour digits
+            ClearDisplay()
+            print(str(currentHour) + 'h')
+        
+        hoursDelta = currentHour
+        minutesDelta = currentMinute
+        secondsDelta = currentSecond
+        
+        #display main digits
+        if currentHour < 10:        
+            firstDigit = 0
+            secondDigit = currentHour
+            Digit(digits[firstDigit], 0)
+            Digit(digits[secondDigit], 1)
+        else:        
+            firstDigit = math.floor(currentHour / 10)
+            secondDigit = math.floor(currentHour % 10)
+            Digit(digits[firstDigit], 0)
+            Digit(digits[secondDigit], 1)
     
     
