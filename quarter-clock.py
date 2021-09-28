@@ -1,8 +1,8 @@
 import picounicorn
 from utime import time, localtime, sleep
 import math
-import threading
 import rv3028_rtc
+from machine import Pin
 
 picounicorn.init()
 
@@ -15,19 +15,28 @@ scl=machine.Pin(27)
 i2c=machine.I2C(1,sda=sda, scl=scl, freq=400000)
 rtc=rv3028_rtc.RV3028(0x52, i2c, "LSM")
 
-# one-time setup to give RV3028 the correct time
-#date_time = (localtime()[0],localtime()[1],localtime()[2],localtime()[3],localtime()[4],localtime()[5],"sun")
-#rtc.set_rtc_date_time(date_time)
-#print("time calibrated?")
-
 currentSecond = rtc.get_seconds()
 currentMinute = rtc.get_minutes()
 currentHour = rtc.get_hours()
 
 pulse = True
 quarterOffsets = [8,10,12,14]
+
 global currentQuarter
-global brt
+global brt #brightness
+global hr #hour
+global shift #color shift
+
+currentQuarter = 0
+brt = 1
+hr = currentHour
+shift = 0
+
+# using these instead of picounicorn's built in functions to be able to access IRQs
+button_a = Pin(12, Pin.IN, Pin.PULL_UP)
+button_b = Pin(13, Pin.IN, Pin.PULL_UP)
+button_x = Pin(14, Pin.IN, Pin.PULL_UP)
+button_y = Pin(15, Pin.IN, Pin.PULL_UP)
 
 # numbers, used in various dictionaries
 zero = 0
@@ -62,15 +71,15 @@ digits = {}
 hours = {}
 
 # expressed in hsv Hue degrees
-# did this because i'm a control freak and using 15 degree increments programatically felt unbalanced toward green
+# did this because i'm a control freak and using even 15 degree increments programatically felt unbalanced toward green
 # could put these values in an array, but easier to edit and see when individually assigned like this
 hours[zero] = 310
 hours[one] = 320
 hours[two] = 330
 hours[three] = 340
 hours[four] = 350
-hours[five] = 0 
-hours[six] = 15 
+hours[five] = 0
+hours[six] = 15
 hours[seven] = 20
 hours[eight] = 30
 hours[nine] = 35
@@ -196,7 +205,7 @@ def Digit(num, offset):
         y = num[i][1]
         
         #shift position over by an offset number and draw pixels          
-        picounicorn.set_pixel(x + offset, y, *Rainbow(hours[currentHour], VB(255, 50)))
+        picounicorn.set_pixel(x + offset, y, *Rainbow(hours[hr], VB(255, 50)))
 
             
 def ClearDisplay():
@@ -205,16 +214,13 @@ def ClearDisplay():
             #draws "black" pixels
             picounicorn.set_pixel(x, y, 0, 0, 0)
             
-def Pillar(width, offset, brightness, height=h, rainbow=True):
+def Pillar(width, offset, brightness, height=h):
     for x in range(width):
         for y in range(height):
-            #shift position over by an offset number and draw pixels
-            if rainbow == True:
-                picounicorn.set_pixel(x + offset, y, *Rainbow(hours[currentHour], brightness))
-            else:
-                picounicorn.set_pixel(x + offset, y, brightness, brightness, brightness)
+            picounicorn.set_pixel(x + offset, y, *Rainbow(hours[hr], brightness))
 
 def Rainbow(hue, value):
+    hue = (hue + shift)%359
     hue = (hue)/360
     r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, 1.0, value/255)]
     return (r, g, b)
@@ -272,7 +278,7 @@ def DisplayQuarters():
     flux = False
     
     # check which quarter we are in
-    if currentMinute <= 13:
+    if currentMinute <= 13 or currentMinute == 59:
         print("first quarter")
         currentQuarter = 0
     elif currentMinute >= 14 and currentMinute <= 28:
@@ -281,17 +287,13 @@ def DisplayQuarters():
     elif currentMinute >= 29 and currentMinute <= 43:
         print("third quarter")
         currentQuarter = 2
-    #TODO: this still isnt quite working when it hits 59 i think
-    elif currentMinute >= 44:
+    elif currentMinute >= 44 and currentMinute <= 58:
         print("fourth quarter")
         currentQuarter = 3
         
     if currentMinute == 14 or currentMinute == 29 or currentMinute == 44 or currentMinute == 59:
         flux = True
     
-    # this is dumb, but it works for now
-    # TODO: change the above "quarter" vars to 0,1,2,3
-    # and use that in arrays below to simplify stuff
     for i in range(4):
 
         # for the current quarter
@@ -354,7 +356,8 @@ def DisplayHours():
     Digit(digits[HourFormat()[0]], 0)
     Digit(digits[HourFormat()[1]], 4)
             
-def HourTransition():    
+def HourTransition():
+    # animation when changing hours
     for i in range(w/2):
         fade = VB(30, 0) + (i*VB(20, 10))
         Pillar(1, (math.ceil(w/2)) + i, fade)
@@ -374,24 +377,21 @@ def HourTransition():
         sleep(1/w)
 
 def HourFormat():
-    if currentHour < 10:
+    global hr
+    
+    # resets the hour if it goes above 23 during user time setting
+    if hr > 23:
+        hr = 0
+    
+    # formats the two-digit hours into two single-digit numbers
+    if hr < 10:
         firstDigit = 0
-        secondDigit = currentHour
+        secondDigit = hr
     else:        
-        firstDigit = math.floor(currentHour / 10)
-        secondDigit = math.floor(currentHour % 10)
+        firstDigit = math.floor(hr / 10)
+        secondDigit = math.floor(hr % 10)
        
     return [firstDigit, secondDigit]
-
-def ButtonToggle(handler, button):
-    if handler != button:
-        if button == True:
-            button = False
-        else:
-            button = True
-        sleep(0.1)
-        return button
-    
 
 def hsv_to_rgb(h, s, v):
     if s == 0.0:
@@ -414,6 +414,89 @@ def hsv_to_rgb(h, s, v):
         return t, p, v
     if i == 5:
         return v, p, q
+    
+def callback_button_a(pin):
+    print('button A')
+    d = debounce(pin)
+
+    if d == None:
+        return
+    elif not d:
+        #TODO: try threading Event before giving up on optimizing this
+        exitLoop = False
+        sleep(0.5)
+        while not exitLoop:
+            for i in range(16):
+                hue = (hours[i])/360
+                r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, 1.0, 0.8)]
+                
+                for x in range(w):
+                    for y in range(h):
+                        picounicorn.set_pixel(i, y, r, g, b)
+                sleep(0.01)
+                
+                if picounicorn.is_pressed(picounicorn.BUTTON_A):
+                    exitLoop = True
+                    break
+                
+            for i in range(16):
+                hue = (hours[i])/360
+                r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, 1.0, 0.8)]
+                
+                for x in range(w):
+                    for y in range(h):
+                        picounicorn.set_pixel(15-i, y, r, g, b)
+                sleep(0.01)
+                
+                if picounicorn.is_pressed(picounicorn.BUTTON_A):
+                    exitLoop = True
+                    break
+                
+            sleep(0.5)
+        Reset()
+
+def callback_button_b(pin):
+    print('button B')
+    d = debounce(pin)
+
+    if d == None:
+        return
+    elif not d:
+        Brightness()
+        
+def callback_button_x(pin):
+    print('button X')
+    d = debounce(pin)
+
+    if d == None:
+        return
+    elif not d:
+        global shift
+        shift = shift + 20
+        print(shift)
+        Reset()
+
+def callback_button_y(pin):
+    print('button Y')
+    d = debounce(pin)
+
+    if d == None:
+        return
+    elif not d:
+        global hr
+        sleep(0.5)
+        hr = hr + 1    
+        Reset()
+    
+# i didn't write this function
+def debounce(pin):
+    prev = None
+    for _ in range(32):
+        current_value = pin.value()
+        if prev != None and prev != current_value:
+            return None
+        prev = current_value
+    return prev
 
 def Reset():
     ClearDisplay()
@@ -432,80 +515,34 @@ def Setup():
 Brightness(True)
 Setup()
 
-
-
 while True:
-    #sleep(0.1) is this breaking the RTC consistency?
     
-    #button "handlers" kind of
-    #buttonA = False
-    buttonA = False
-    buttonA = ButtonToggle(picounicorn.is_pressed(picounicorn.BUTTON_A), buttonA)
-    
-    
-    buttonB = False
-    buttonBHandler = picounicorn.is_pressed(picounicorn.BUTTON_B)
+    button_a.irq(trigger=Pin.IRQ_FALLING, handler=callback_button_a)
+    button_b.irq(trigger=Pin.IRQ_FALLING, handler=callback_button_b)
+    button_x.irq(trigger=Pin.IRQ_FALLING, handler=callback_button_x)
+    button_y.irq(trigger=Pin.IRQ_FALLING, handler=callback_button_y)
 
     # only run once per second
     if currentSecond != rtc.get_seconds():
+        print(hr, currentMinute, currentSecond)
         
         Pulse()
         
-        print(currentHour, currentMinute, currentSecond)
-        
         currentSecond = rtc.get_seconds()
-        #print(str(currentSecond) + "s")
                 
         # check minute        
         if rtc.get_minutes() != currentMinute:
             DisplayQuarters()
             
             currentMinute = rtc.get_minutes()
-            print(str(currentMinute) + 'm')
         
         # check hour  
         if rtc.get_hours() != currentHour:
             currentHour = rtc.get_hours()
-            print(str(currentHour) + 'h')
             
             HourTransition()
+            DisplayQuarters()
         
         DisplayHours()
-
-    # disco mode, TODO: turn this into a function by making a "button handler" with Break  
-    if buttonA == True:
-        buttonA = ButtonToggle(picounicorn.is_pressed(picounicorn.BUTTON_A), buttonA)
-        while buttonA == False:
-            sleep(0.5)
-            exitloop = picounicorn.is_pressed(picounicorn.BUTTON_A)
-            
-            for i in range(16):
-                hue = (hours[i])/360
-                r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, 1.0, 0.8)]
-                
-                for x in range(w):
-                    for y in range(h):
-                        picounicorn.set_pixel(i, y, r, g, b)
-                sleep(0.01)
-                
-            for i in range(16):
-                hue = (hours[i])/360
-                r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, 1.0, 0.8)]
-                
-                for x in range(w):
-                    for y in range(h):
-                        picounicorn.set_pixel(15-i, y, r, g, b)
-                sleep(0.01)
-            if exitloop == True:
-                ClearDisplay()
-                HourTransition()
-                DisplayHours()
-                DisplayQuarters()
-                break
-    
-    while buttonB == True:
-        Brightness()
-        sleep(0.1)
-        break
     
     
