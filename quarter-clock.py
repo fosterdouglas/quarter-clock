@@ -205,7 +205,7 @@ def Digit(num, offset):
         y = num[i][1]
         
         #shift position over by an offset number and draw pixels          
-        picounicorn.set_pixel(x + offset, y, *Rainbow(hours[hr], VB(255, 50)))
+        picounicorn.set_pixel(x + offset, y, *Rainbow(ColorShift(hours[hr], 10), VB(255, 50)))
 
             
 def ClearDisplay():
@@ -214,16 +214,22 @@ def ClearDisplay():
             #draws "black" pixels
             picounicorn.set_pixel(x, y, 0, 0, 0)
             
-def Pillar(width, offset, brightness, height=h):
+def Pillar(width, offset, brightness, height=h, hue=hours[hr], hueshift=0):
+    hue = hue + hueshift
     for x in range(width):
         for y in range(height):
-            picounicorn.set_pixel(x + offset, y, *Rainbow(hours[hr], brightness))
+            picounicorn.set_pixel(x + offset, y, *Rainbow(hue, brightness))
 
 def Rainbow(hue, value):
     hue = (hue + shift)%359
     hue = (hue)/360
     r, g, b = [int(c * 255) for c in hsv_to_rgb(hue, 1.0, value/255)]
     return (r, g, b)
+
+def ColorShift(color, delta=10):
+    adj = color + delta
+    #print(adj)
+    return adj
 
 def Brightness(default=False):
     global brt
@@ -247,6 +253,14 @@ def VB(value, minimum=0):
 
 def Pulse():
     if currentSecond != rtc.get_seconds():
+        global hr
+        
+        #TODO: maybe replace this with a function, it's used three times kind of
+        if hr == 23:
+            forwardhue = hours[0]
+        else:
+            forwardhue = hours[hr+1]
+        
         
         #TODO: continue working on this to optimize
         if currentQuarter == 0:
@@ -266,16 +280,22 @@ def Pulse():
         elif currentQuarter == 3:
             localOffset = (currentSecond%6)+quarterOffsets[0]
             
-        for i in range(VB(90,30), VB(210, 120), 30):
-            Pillar(1, localOffset, i)
+        for i in range(VB(50,25), VB(210, 120), 25):
+            Pillar(1, localOffset, i, hue=forwardhue, hueshift=20)
             sleep(0.05)
-        for i in reversed(range(VB(90,30), VB(210, 120), 30)):
-            Pillar(1, localOffset, i)
+        for i in reversed(range(VB(50,25), VB(210, 120), 25)):
+            Pillar(1, localOffset, i, hue=forwardhue, hueshift=20)
             sleep(0.05)
 
 def DisplayQuarters():
     global currentQuarter
+    global hr
     flux = False
+    
+    if hr == 23:
+        forwardhue = hours[0]
+    else:
+        forwardhue = hours[hr+1]
     
     # check which quarter we are in
     if currentMinute <= 13 or currentMinute == 59:
@@ -295,6 +315,8 @@ def DisplayQuarters():
         flux = True
     
     for i in range(4):
+        
+        
 
         # for the current quarter
         if i == currentQuarter:
@@ -303,53 +325,53 @@ def DisplayQuarters():
                 # animation for blink/fade each minute
                 print('minute blink')
                 for desc in reversed(range(VB(34,0), VB(204, 100), 17)):  
-                    Pillar(2, quarterOffsets[i], desc)
+                    Pillar(2, quarterOffsets[i], desc, hue=forwardhue, hueshift=20)
                     sleep(0.02)
                 for asc in range(VB(34,0), VB(204, 100), 17):  
-                    Pillar(2, quarterOffsets[i], asc)
+                    Pillar(2, quarterOffsets[i], asc, hue=forwardhue, hueshift=20)
                     sleep(0.02)
                     
-                Pillar(2, quarterOffsets[i], VB(240, 80))
+                Pillar(2, quarterOffsets[i], VB(240, 80), hue=forwardhue, hueshift=20)
                 
             # animate for each quarter change
             if flux == True:
                 
                 if i > 0:
-                    Pillar(2, quarterOffsets[i - 1], VB(240, 80))
+                    Pillar(2, quarterOffsets[i - 1], VB(240, 80), hue=forwardhue, hueshift=20)
                     
                     # animate off previous quarter
                     print('previous quarter off')
                     for off in range(h):
-                        Pillar(2, quarterOffsets[i - 1], 0, off + 1)
+                        Pillar(2, quarterOffsets[i - 1], 0, off + 1, hue=forwardhue, hueshift=20)
                         sleep(0.03)
-                    # replace the emptiness with fade quarter
-                    Pillar(2, quarterOffsets[i - 1], VB(60, 30))
+                    # replace the emptiness with faded quarter
+                    Pillar(2, quarterOffsets[i - 1], VB(50, 25), hue=forwardhue, hueshift=20)
                     
                      #animate next quarter over
                     print('next quarter on')
                     for on in range(h):
-                        Pillar(2, quarterOffsets[i], VB(240, 80), on + 1)
+                        Pillar(2, quarterOffsets[i], VB(240, 80), on + 1, hue=forwardhue, hueshift=20)
                         sleep(0.03)
-                    Pillar(2, quarterOffsets[i], VB(240, 80))
+                    Pillar(2, quarterOffsets[i], VB(240, 80), hue=forwardhue, hueshift=20)
                 else:
                     # animate off previous quarter
                     print('previous quarter off')
                     for off in range(h):
-                        Pillar(2, quarterOffsets[3], 0, off + 1)
+                        Pillar(2, quarterOffsets[3], 0, off + 1, hue=forwardhue, hueshift=20)
                         sleep(0.03)
-                    # replace the emptiness with fade quarter
-                    Pillar(2, quarterOffsets[3], VB(60, 30))
+                    # replace the emptiness with faded quarter
+                    Pillar(2, quarterOffsets[3], VB(50, 25), hue=forwardhue, hueshift=20)
                     
                     # otherwise, animate the first quarter   
                     print('next quarter on')
                     for on in range(h):
-                        Pillar(2, quarterOffsets[0], VB(240, 80), on + 1)
+                        Pillar(2, quarterOffsets[0], VB(240, 80), on + 1, hue=forwardhue, hueshift=20)
                         sleep(0.03)
-                    Pillar(2, quarterOffsets[0], VB(240, 80))
+                    Pillar(2, quarterOffsets[0], VB(240, 80), hue=forwardhue, hueshift=20)
         
-        # for the other 3 quarters
+        # for the other 3 faded quarters
         else:
-            Pillar(2, quarterOffsets[i], VB(60, 30))
+            Pillar(2, quarterOffsets[i], VB(50, 25), hue=forwardhue, hueshift=20)
         
 def DisplayHours():
     # display main digits
@@ -392,6 +414,7 @@ def HourFormat():
         secondDigit = math.floor(hr % 10)
        
     return [firstDigit, secondDigit]
+        
 
 def hsv_to_rgb(h, s, v):
     if s == 0.0:
@@ -472,8 +495,7 @@ def callback_button_x(pin):
         return
     elif not d:
         global shift
-        shift = shift + 20
-        print(shift)
+        shift = ColorShift(shift, 20)
         Reset()
 
 def callback_button_y(pin):
@@ -540,9 +562,8 @@ while True:
         if rtc.get_hours() != currentHour:
             currentHour = rtc.get_hours()
             
+            hr = hr + 1
             HourTransition()
             DisplayQuarters()
         
         DisplayHours()
-    
-    
