@@ -5,16 +5,15 @@ This project uses an adapted library for the RV3028 RTC, found at this https://g
 Full description coming soon.
 
 
-
-## A - Mode
+## A -- Mode
 
 Press this to change the mode.
 
-- 1 Quarter-Clock!
-- 2 Visuals
-- 3 Options
+1 Quarter-Clock!
+2 Options
+3 Visuals
 
-## B - Select
+## B -- Select
 
 In Quarter-Clock mode, [does nothing yet].
 
@@ -22,7 +21,7 @@ In Visuals mode, interacts with the visual.
 
 In Options mode, changes the option's current setting.
 
-## X - Cycle Up
+## X -- Cycle Up
 
 In Quarter Clock mode, cycles through brightness levels.
 
@@ -34,6 +33,6 @@ In Options mode, cycles through options:
 - Auto-Brightness
 - 
 
-## Y - Cycle Down
+## Y -- Cycle Down
 
 Cycles opposite direction.
