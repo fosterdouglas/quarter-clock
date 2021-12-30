@@ -3,7 +3,9 @@ from machine import Pin
 from machine import ADC
 from utime import sleep
 import math
-import random
+from random import uniform
+from random import randrange
+from random import randint
 import gc
 import rv3028_rtc
 
@@ -41,7 +43,6 @@ global current_visual
 global option_list
 global next_hue
 global next_sat
-global disco_position
 
 global_brt = 0.8 #brightness from 0.4 to 1.0
 hr24_mode = True
@@ -53,11 +54,21 @@ quarter_positions = [0, 8, 10, 12, 14]
 current_palette = 0
 current_mode = 0
 current_option = 0
-option_list = ['HRD', 'DST', 'BRT', 'COL']
+option_list = ['HOU', 'DST', 'BRT', 'COL', '24H']
+visual_list = ['DISCO', 'MATRIX', 'DIAGONAL', 'DOTS']
 current_visual = 0
 next_hue = 0
 next_sat = 0
-disco_position = 0
+
+diagonal_increment = 0
+dots_increment = -1
+
+
+# Create X,Y map of display's pixel locations
+display_coordinates = []
+for x in range(display_width):
+    for y in range (display_height):
+        display_coordinates.append([x, y])
 
 # Button Setup
 ## (explicit, instead of using picounicorn's built-in functions, to be able to access IRQs)
@@ -205,8 +216,18 @@ symbol_list[1] = [
       [1,6],
 ]
 
-# Arrays To Draw Needed Letters
-letter_list = [None] * 27
+# Arrays To Draw Needed Letters (and numbers as strings)
+letter_list = [None] * 32
+
+letter_list[1] = [
+[0,0],[1,0],[2,0],
+[0,1],      [2,1],
+[0,2],      [2,2],
+[0,3],[1,3],[2,3],
+[0,4],      [2,4],
+[0,5],      [2,5],
+[0,6],      [2,6]
+]
 
 #B
 letter_list[2] = [
@@ -263,6 +284,7 @@ letter_list[8] = [
 [0,6],      [2,6]
 ]
 
+#L
 letter_list[12] = [
 [0,0],
 [0,1],      
@@ -284,6 +306,7 @@ letter_list[14] = [
 [0,6],      [2,6]
 ]
 
+#O
 letter_list[15] = [
 [0,0],[1,0],[2,0],
 [0,1],      [2,1],
@@ -325,6 +348,39 @@ letter_list[20] = [
       [1,4],
       [1,5],
       [1,6]
+]
+
+#U
+letter_list[21] = [
+[0,0],      [2,0],
+[0,1],      [2,1],
+[0,2],      [2,2],
+[0,3],      [2,3],
+[0,4],      [2,4],
+[0,5],      [2,5],
+[0,6],[1,6],[2,6]
+]
+
+# 2 (for string use)
+letter_list[29] = [
+[0,0],[1,0],[2,0],
+            [2,1],
+            [2,2],
+[0,3],[1,3],[2,3],
+[0,4],
+[0,5],
+[0,6],[1,6],[2,6]
+]
+
+# 4 (for string use)
+letter_list[31] = [
+[0,0],      [2,0],
+[0,1],      [2,1],
+[0,2],      [2,2],
+[0,3],[1,3],[2,3],
+            [2,4],
+            [2,5],
+            [2,6]
 ]
 
 # To Check And Adjust Brightness Based On Ambient Light
@@ -454,8 +510,12 @@ def draw_string(string, colored=True):
     string = string.upper()
     string_map = []
     for char in string:
-        # Used for ASCII conversion, to map 1-26 to A-Z
-        string_map.append(ord(char) - 64) 
+        if ord(char) > 47 and ord(char) < 58:
+            delta = 21 # to map string values 0-9 to array values 27-36
+        else:
+            delta = 64 # To map string values A-Z to array values 1-26
+
+        string_map.append(ord(char) - delta) 
 
     i = 0
     for pos in string_map:
@@ -485,9 +545,22 @@ def blink_string(string):
     for i in range(3):
         clear_display()
         draw_string(string)
-        sleep(0.4)
+        sleep(0.2)
         clear_display()
         sleep(0.1)
+    sleep(0.1)
+
+# To visually blink the current time
+def blink_time():
+    for i in range(3):
+        clear_display()
+        draw_character(digit_list[format_hour(gmt_hr)[0]], 0, local_hue=theme_hue[get_palette_pos(format_hour(gmt_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(gmt_hr)[2])], local_val=variable_brightness(255, 100))
+        draw_character(digit_list[format_hour(gmt_hr)[1]], 4, local_hue=theme_hue[get_palette_pos(format_hour(gmt_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(gmt_hr)[2])], local_val=variable_brightness(255, 100))
+        update_next_hue()
+        sleep(0.2)
+        clear_display()
+        sleep(0.1)
+    sleep(0.1)
 
 def convert_color(hue, sat, val):
     # Incoming values: hue is 0-360, sat is 0.0-1.0 and val is 0-255
@@ -562,7 +635,8 @@ def incr_hour_delta(delta=1):
 
 # To toggle 24-hour clock      
 def toggle_24hour_mode():
-    global h24_mode
+    global hr24_mode
+
     hr24_mode = not hr24_mode
     print('Toggle 24h mode')
     
@@ -578,16 +652,27 @@ def toggle_brightness_mode():
 def check_dst():
     global dst_delta
     
-    #TODO: test this properly
+    # (if it's nov - mar )
     if gmt_month >= 11 or gmt_month <= 3:
+        
+        # (if it is exactly nov and is the 7th or later)
         if gmt_month == 11 and gmt_date >= 7:
-            dst_delta = -1
-        elif gmt_month == 3 and gmt_date <= 14:
-            dst_delta = -1   
-        else:
             dst_delta = 0
+
+        # (if it is exactly mar and is the 14th or earlier)
+        elif gmt_month == 3 and gmt_date <= 14:
+            dst_delta = 0
+
+        # (if it is the other months between nov and mar)
+        elif gmt_month != 3 or gmt_month != 11:
+            dst_delta = 0
+        print('DST is not happening')
+
     else:
-        dst_delta = 0
+
+        # (if it is the rest of the year)
+        dst_delta = 1
+        print('DST is happening')   
 
 # Animation when changing hours                            
 def hour_transition():
@@ -659,6 +744,17 @@ def cycle_current_option(val):
 
     print('Option: ' + option_list[current_option])  
 
+# To cycle through visuals  
+def cycle_current_visual(val):
+    global current_visual
+
+    current_visual = (current_visual + val) % len(visual_list)
+
+    if current_visual == -1:
+        current_visual = len(visual_list)
+
+    print('Visual: ' + visual_list[current_visual])  
+
 # To Update Next Hue (Used For Visual Contrast)
 def update_next_hue():
     global next_hue
@@ -695,7 +791,7 @@ def callback_button_b(pin):
             # Hour (Option 0)
             if current_option == 0:
                 incr_hour_delta()
-                # TODO: Make blink_hour function
+                blink_time()
 
             # Daylight Savings Time (Option 1)
             elif current_option == 1:
@@ -703,10 +799,11 @@ def callback_button_b(pin):
                 check_dst()
 
                 if dst_mode == True: 
-                    blink_string("ON")
+                    blink_string("AUTO")
                 else:
                     blink_string("OFF")
 
+                display_hours()
                 draw_string("DST")
 
             # Auto-Brightness (Option 2)
@@ -717,7 +814,7 @@ def callback_button_b(pin):
                 if brightness_override == True: 
                     blink_string("OFF")
                 else:
-                    blink_string("ON")
+                    blink_string("AUTO")
 
                 draw_string("BRT")
 
@@ -731,41 +828,19 @@ def callback_button_b(pin):
                 toggle_24hour_mode()
                 
                 clear_display()
-                if h24_mode == True:
-                    draw_string("on")
-                    sleep(3)
+                if hr24_mode == True:
+                    blink_string("ON")
                 else:
-                    draw_string("off")
-                    sleep(3)
+                    blink_string("OFF")
 
-                draw_string("dst")
+                draw_string("DST")
             
             clear_display()
         
         # Visuals Mode
         elif current_mode == 2:
-            # Interact With the visual
-            if disco_position%8 == 0:
-                sleep(0.2)
-                
-                # Celebrate, You Win! ...An Animation
-                for i in range(24): 
-                    for pos in range(16):
-
-                        #TODO: make the colors in this animation less ugly
-                        hue = random.randint(330,60)
-                        sat = random.randint(70,100)/100
-                        val = random.randint(150,255)
-                        r, g, b = convert_color(hue, sat, val)
-                        for x in range(display_width):
-                            for y in range(display_height):
-                                picounicorn.set_pixel(pos, random.randint(0,6), r, g, b)
-                    sleep(0.05)
-
-                # TODO: Not sure if want to move user to Clock here or restart the game    
-                set_current_mode(0)
-            pass
-        pass
+            cycle_current_visual(1)
+            clear_display()
             
 # X -- Cycle Up        
 def callback_button_x(pin):
@@ -794,6 +869,10 @@ def callback_button_x(pin):
             #Redraw option name
             draw_string(option_list[current_option], colored=False)
 
+        # Vis Mode
+        elif current_mode == 2:
+            change_brightness(0.1)
+
 # Y -- Cycle Down
 def callback_button_y(pin):
     print('Cycle Down')
@@ -820,7 +899,10 @@ def callback_button_y(pin):
 
             #Redraw option name
             draw_string(option_list[current_option], colored=False)
-        
+
+        # Vis Mode
+        elif current_mode == 2:
+            change_brightness(-0.1)
 
 # Prevent button presses from debouncing    
 def check_debounce(pin):
@@ -831,6 +913,13 @@ def check_debounce(pin):
             return None
         prev = current_value
     return prev
+
+# Facimile of random.shuffle()
+def random_shuffle(seq):
+    l = len(seq)
+    for i in range(l):
+        j = randrange(l)
+        seq[i], seq[j] = seq[j], seq[i]
 
 # To Soft Reset
 def soft_reset():
@@ -862,8 +951,6 @@ while True:
             gmt_sec = rtc.get_seconds()
             seconds_pulse()
             ambient_light_adapt()
-            
-            print(format_hour(gmt_hr)[2], gmt_min, gmt_sec)
                     
             # If Minute Has Changed        
             if rtc.get_minutes() != gmt_min:
@@ -876,7 +963,9 @@ while True:
                     check_dst()
                     incr_hour_delta()
                     hour_transition()
-            
+
+            print(format_hour(gmt_hr)[2], gmt_min, gmt_sec)
+
             draw_quarters()
             display_hours()
 
@@ -885,6 +974,11 @@ while True:
             pass
 
         update_next_hue()
+
+        # x_val = list(range(0, 16))
+        # y_val = list(range(0,6))
+
+        
     
     clear_display()
 
@@ -901,11 +995,12 @@ while True:
     # Visuals Mode (Mode 2)
     while current_mode == 2:
 
-        # Disco Game (Vis 0)
+        # To keep track of when the visual changes, for resetting purposes
+        vis_delta = current_visual
+
+        # Disco (Vis 0)
         if current_visual == 0:
             for i in range(32):
-                global disco_position
-                disco_position = i
 
                 # Left Side Colors
                 if i < 16:
@@ -917,14 +1012,110 @@ while True:
                     pos = 31 - i
                     hue = theme_hue[i - 16]
                     
-                r, g, b = convert_color(hue, 1.0, 220)
+                r, g, b = convert_color(hue, 1.0, variable_brightness(220, 100))
                 
                 for x in range(display_width):
                     for y in range(display_height):
                         picounicorn.set_pixel(pos, y, r, g, b)
                 sleep(1/34)
-                
             sleep(0.5)
 
+        if vis_delta != current_visual:
+            clear_display()
+            vis_delta = current_visual
+
+        # Matrix (Vis 1)
+        if current_visual == 1:
+            odds = [1,3,5,7,9,11,13,15]
+
+            for i in range(110):
+
+                hue = theme_hue[(i*10)%23]
+                sat = uniform(0.8, 1.0)
+                val = 200
+
+                r,g,b = convert_color(hue, sat, val)
+
+                for x in range(display_width):
+                    for y in range(display_height):
+                        picounicorn.set_pixel(((i*10)%16), ((i*10)%7), r, g, b)
+                        picounicorn.set_pixel(odds[i%8], y, 0, 0, 0)
+
+        if vis_delta != current_visual:
+            clear_display()
+            vis_delta = current_visual
+
+        # Diag (Vis 2)
+        if current_visual == 2:
+            diagonal_increment += 1
+            
+            if diagonal_increment > 100000:
+                diagonal_increment = 0
+
+            hue = theme_hue[diagonal_increment%23]
+            sat = uniform(0.8, 1.0)
+            val = 200
+
+            r,g,b = convert_color(hue, sat, val)
+
+            for x in range(display_width):
+                for y in range(display_height):
+
+                    picounicorn.set_pixel(((diagonal_increment)%16), ((diagonal_increment)%7), r, g, b)
+        
+        if vis_delta != current_visual:
+            clear_display()
+            diagonal_increment = 0
+            vis_delta = current_visual
+
+        # Dots (Vis 3)
+        if current_visual == 3:
+
+            # Create array            
+            if dots_increment == -1:
+                shuf_up = display_coordinates
+                shuf_down = display_coordinates
+
+                # Randomize the order of on/off 
+                random_shuffle(shuf_up)
+                random_shuffle(shuf_down)
+
+                dots_coordinates = shuf_up + shuf_down
+
+            dots_increment += 1
+
+            if dots_increment == len(dots_coordinates):
+                dots_increment = -1
+                print('Reset Counter')    
+
+            hue = theme_hue[dots_increment%23]
+
+            # Lights on
+            if dots_increment < len(dots_coordinates)/2:
+                sat = uniform(0.6, 1.0)
+                val = randint(15, 250)
+
+                # Fade/ramp the light up
+                for i in reversed(range(1,10)):
+                    r,g,b = convert_color(hue, sat, (1/i)*val)
+                    picounicorn.set_pixel(dots_coordinates[dots_increment][0], dots_coordinates[dots_increment][1], r, g, b)
+                    sleep(0.03)
+
+            # Lights off
+            else:
+                sat = uniform(0.4, 0.6)
+                val = randint(15, 40)
+
+                r,g,b = convert_color(hue, sat, val)
+                picounicorn.set_pixel(dots_coordinates[dots_increment][0], dots_coordinates[dots_increment][1], r, g, b)
+                sleep(0.03)
+
+            sleep(randint(1,3)/12)
+
+        if vis_delta != current_visual:
+            clear_display()
+            dots_increment = -1
+            vis_delta = current_visual
+        
     soft_reset()
             
