@@ -2,43 +2,29 @@
 
 This project uses an adapted library for the RV3028 RTC, found at this https://github.com/x10dit/rv3028_rtc GitHub repo.
 
-Full description coming soon.
+It also uses Pimoroni's custom Pico firmware v0.X.X, which uses MicroPython v1.16, found here: https://github.com/pimoroni/pimoroni-pico.
 
+## A -- Select
 
-## A -- Mode
+In Quarter-Clock mode, cycles through different visualizations.
 
-Press this to change the mode.
+## B -- Options
 
-1 Quarter-Clock!
+In Quarter-Clock mode, toggles in and out of the options mode.
 
-2 Options
+(If a visualization is displaying, this will instead interact with or modify it)
 
-3 Visuals
-
-## B -- Select
-
-In Quarter-Clock mode, [does nothing].
-
-In Options mode, changes the option's current setting.
-
-In Visuals mode, cycles through different visuals.
-
-## X -- Brightness/Cycle Up
+## X -- Brightness/Cycle Option
 
 In Quarter-Clock mode, changes brightness level.
 
-In Options mode, cycles *up* through options.
+In Options mode, cycles to the next option.
 
-In Visuals mode, changes brightness level.
-
-## Y -- Color/Cycle Down
+## Y -- Color/Change Option
 
 In Quarter-Clock mode, changes the color theme.
 
-In Options mode, cycles *down* through the options.
-
-In Visuals mode, changes the color theme.
-
+In Options mode, changes the option's current setting.
 
 ## Options
 
@@ -60,8 +46,14 @@ In Visuals mode, changes the color theme.
     - Enables or disables the 24H time display style
     - DEfault: On
 
+## Resetting the Quarter-Clock:
+[ soon ]
+
+## Notes:
+[ soon ]
 
 ## TODO:
 
-- Create and test a HOUR RESET function
-- Make UP into Brightness and DOWN into Color for modes 0 and 2
+- Figure out error handling for battery dying? like, if rtc HAS no value when it starts up, it needs the run the one time setting up
+- Write README description  
+- Add interaction to visuals 
