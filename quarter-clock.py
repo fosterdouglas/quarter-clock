@@ -2,6 +2,7 @@ import picounicorn
 from machine import Pin
 from machine import ADC
 from utime import sleep
+from utime import localtime
 import math
 from random import uniform
 from random import randrange
@@ -21,13 +22,12 @@ rtc=rv3028_rtc.RV3028(0x52, i2c, "LSM")
 # read the RV3028
 gmt_sec = rtc.get_seconds()
 gmt_min = rtc.get_minutes()
-gmt_hr = rtc.get_hours()
 gmt_date = rtc.get_date()
 gmt_month = rtc.get_month()
+local_hr = rtc.get_hours()
 
 light_sensor = machine.ADC(28)
 
-#TODO: most of these can be not global probably
 global global_brt #brightness
 global hr24_mode #24h display style
 global dst_mode #DST enabled or disabled
@@ -43,6 +43,9 @@ global current_visual
 global option_list
 global next_hue
 global next_sat
+global configuration_increment
+global configuration_step
+global configuration_value
 
 global_brt = 0.8 #brightness from 0.4 to 1.0
 hr24_mode = True
@@ -54,15 +57,17 @@ quarter_positions = [0, 8, 10, 12, 14]
 current_palette = 0
 current_mode = 0
 current_option = 0
-option_list = ['HOU', 'DST', 'BRT', 'COL', '24H']
+option_list = ['HUR', 'DST', 'BRT', 'COL', '24H']
 visual_list = ['DISCO', 'MATRIX', 'DIAGONAL', 'DOTS']
-current_visual = 0
+current_visual = -1
 next_hue = 0
 next_sat = 0
+configuration_increment = 0
+configuration_step = 0
+configuration_value = 0
 
 diagonal_increment = 0
 dots_increment = -1
-
 
 # Create X,Y map of display's pixel locations
 display_coordinates = []
@@ -202,7 +207,7 @@ digit_list[9] = [
 ]
 
 # Arrays To Draw Needed Symbols
-symbol_list = [None] * 2
+symbol_list = [None] * 7
 
 # Carat Up
 symbol_list[0] = [
@@ -214,6 +219,45 @@ symbol_list[0] = [
 symbol_list[1] = [
 [0,5],      [2,5],
       [1,6],
+]
+
+# Carat Right
+symbol_list[2] = [
+      [1,4],
+           [2,5],
+      [1,6],
+]
+
+# Carat Left
+symbol_list[3] = [
+      [2,0],
+[1,1],
+      [2,2],
+]
+
+# Question Mark
+symbol_list[4] = [
+[0,0],[1,0],[2,0],
+[0,1],      [2,1],
+            [2,2],
+      [1,3],
+      [1,4],
+
+      [1,6]
+]
+
+# Rect
+symbol_list[5] = [
+      [1,4],[2,4],
+      [1,5],[2,5],
+      [1,6],[2,6]
+]
+
+# Carat Right Alt
+symbol_list[6] = [
+      [1,0],
+           [2,1],
+      [1,2],
 ]
 
 # Arrays To Draw Needed Letters (and numbers as strings)
@@ -262,6 +306,17 @@ letter_list[4] = [
 [0,6],[1,6],
 ]
 
+#E
+letter_list[5] = [
+[0,0],[1,0],[2,0],
+[0,1],      
+[0,2],      
+[0,3],[1,3],[2,3],
+[0,4],      
+[0,5],      
+[0,6],[1,6],[2,6]
+]
+
 #F
 letter_list[6] = [
 [0,0],[1,0],[2,0],
@@ -284,6 +339,28 @@ letter_list[8] = [
 [0,6],      [2,6]
 ]
 
+#I
+letter_list[9] = [
+[0,0],     
+[0,1],     
+[0,2],     
+[0,3],
+[0,4],      
+[0,5],     
+[0,6],      
+]
+
+#K
+letter_list[11] = [
+[0,0],      [2,0], 
+[0,1],[1,1],      
+[0,2],
+[0,3],
+[0,4],
+[0,5],[1,5],
+[0,6],      [2,6],
+]
+
 #L
 letter_list[12] = [
 [0,0],
@@ -294,6 +371,17 @@ letter_list[12] = [
 [0,5],      
 [0,6],[1,6],[2,6]
 ]
+
+#M
+letter_list[13] = [
+[0,0],                  [4,0],
+      [1,1],      [3,1],
+[0,2],      [2,2],      [4,2],
+[0,3],                  [4,3],
+[0,4],                  [4,4],
+[0,5],                  [4,5],
+[0,6],                  [4,6]
+]   
 
 #N
 letter_list[14] = [
@@ -359,6 +447,16 @@ letter_list[21] = [
 [0,4],      [2,4],
 [0,5],      [2,5],
 [0,6],[1,6],[2,6]
+]
+
+letter_list[25] = [
+[0,0],      [2,0],
+[0,1],      [2,1],
+[0,2],      [2,2],
+      [1,3],
+      [1,4],
+      [1,5],
+      [1,6]
 ]
 
 # 2 (for string use)
@@ -477,13 +575,13 @@ def format_hour(hour):
     return [first_digit, second_digit, formatted_hour]
 
 # To Adjust Brightness Of Anything Drawn 
-def variable_brightness(value, minimum=0):
-    value = value * global_brt
+def variable_brightness(maximum, minimum=0):
+    maximum = maximum * global_brt
 
-    if value < minimum:
-        value = minimum
+    if maximum < minimum:
+        maximum = minimum
         
-    return int(value)
+    return int(maximum)
 
 # To Format A Double-Digit Hour Into Two Individual Digits
 def split_digit(digit):
@@ -496,7 +594,7 @@ def split_digit(digit):
     return first_digit, second_digit
 
 # To Draw A Character    
-def draw_character(char, offset, local_hue=theme_hue[get_palette_pos(format_hour(gmt_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(gmt_hr)[2])], local_val=variable_brightness(255, 50)):
+def draw_character(char, offset, local_hue=theme_hue[get_palette_pos(format_hour(local_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(local_hr)[2])], local_val=variable_brightness(255, 50)):
     for i in range(len(char)):
         x = char[i][0]        
         y = char[i][1]
@@ -505,7 +603,7 @@ def draw_character(char, offset, local_hue=theme_hue[get_palette_pos(format_hour
         picounicorn.set_pixel(x + offset, y, r, g, b)
 
 # To Draw A String
-def draw_string(string, colored=True):
+def draw_string(string, offset=0, colored=True):
 
     string = string.upper()
     string_map = []
@@ -520,11 +618,17 @@ def draw_string(string, colored=True):
     i = 0
     for pos in string_map:
         if colored == True:
-            draw_character(letter_list[pos], i*4)
+            draw_character(letter_list[pos], (i*4)+offset)
         else:
             # Option To Override Color To White, For Contrast/Distinction Uses
-            draw_character(letter_list[pos], i*4, local_hue=0, local_sat=0, local_val=255)
+            draw_character(letter_list[pos], (i*4)+offset, local_hue=0, local_sat=0, local_val=255)
         i = i + 1
+
+# To draw the carats used in Configuration mode
+def draw_carats():
+    draw_character(symbol_list[0], 0, local_hue=330, local_sat=1, local_val=150)
+    draw_character(symbol_list[1], 0, local_hue=330, local_sat=1, local_val=150)
+    draw_character(symbol_list[2], 13, local_hue=330, local_sat=1, local_val=150)
 
 # To Draw An Empty Display
 def clear_display(width=display_width, height=display_height):
@@ -533,7 +637,7 @@ def clear_display(width=display_width, height=display_height):
             picounicorn.set_pixel(x, y, 0, 0, 0)
 
 # To Draw Light Points And Lines To The Display           
-def draw(width, height, offset_x, offset_y, local_val, local_hue=theme_hue[get_palette_pos(format_hour(gmt_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(gmt_hr)[2])]):
+def draw(width, height, offset_x, offset_y, local_val, local_hue=theme_hue[get_palette_pos(format_hour(local_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(local_hr)[2])]):
     # TODO: Update parameter "local_val" to new position at end and give default value
     r, g, b = convert_color(local_hue, local_sat, local_val)
     for x in range(width):
@@ -554,8 +658,8 @@ def blink_string(string):
 def blink_time():
     for i in range(3):
         clear_display()
-        draw_character(digit_list[format_hour(gmt_hr)[0]], 0, local_hue=theme_hue[get_palette_pos(format_hour(gmt_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(gmt_hr)[2])], local_val=variable_brightness(255, 100))
-        draw_character(digit_list[format_hour(gmt_hr)[1]], 4, local_hue=theme_hue[get_palette_pos(format_hour(gmt_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(gmt_hr)[2])], local_val=variable_brightness(255, 100))
+        draw_character(digit_list[format_hour(local_hr)[0]], 0, local_hue=theme_hue[get_palette_pos(format_hour(local_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(local_hr)[2])], local_val=variable_brightness(255, 100))
+        draw_character(digit_list[format_hour(local_hr)[1]], 4, local_hue=theme_hue[get_palette_pos(format_hour(local_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(local_hr)[2])], local_val=variable_brightness(255, 100))
         update_next_hue()
         sleep(0.2)
         clear_display()
@@ -623,15 +727,51 @@ def draw_quarters():
         
 #  To display the hour digits        
 def display_hours():
-    draw_character(digit_list[format_hour(gmt_hr)[0]], 0, local_hue=theme_hue[get_palette_pos(format_hour(gmt_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(gmt_hr)[2])], local_val=variable_brightness(255, 100))
-    draw_character(digit_list[format_hour(gmt_hr)[1]], 4, local_hue=theme_hue[get_palette_pos(format_hour(gmt_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(gmt_hr)[2])], local_val=variable_brightness(255, 100))
+    draw_character(digit_list[format_hour(local_hr)[0]], 0, local_hue=theme_hue[get_palette_pos(format_hour(local_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(local_hr)[2])], local_val=variable_brightness(255, 100))
+    draw_character(digit_list[format_hour(local_hr)[1]], 4, local_hue=theme_hue[get_palette_pos(format_hour(local_hr)[2])], local_sat=theme_sat[get_palette_pos(format_hour(local_hr)[2])], local_val=variable_brightness(255, 100))
 
 # To change the hour by some amount, measured by the change from the global time    
-def incr_hour_delta(delta=1):
-    global hr_delta
-    hr_delta = hr_delta + delta
-    if hr_delta > 23:
-        hr_delta = 0
+def incr_hour(delta=1):
+    global local_hr
+
+    current_time = rtc.get_hours()
+    new_time = current_time + delta
+    if new_time > 23:
+        new_time = 0
+    rtc.set_hours(new_time)
+    local_hr = rtc.get_hours()
+
+# To move through the configuration steps
+def incr_configuration_step():
+    global configuration_step
+
+    configuration_step += 1
+    draw_character(symbol_list[2], 13, local_hue=140, local_sat=0.9, local_val=200)
+    sleep(0.3)
+
+def change_configuration_value(maximum, minimum=0, delta=1, offset=0):
+    global configuration_value   
+                
+    configuration_value = configuration_value + delta
+
+    if configuration_value > maximum:
+        configuration_value = (0 + minimum)
+    
+    if configuration_value < (0 + minimum):
+        configuration_value = maximum
+
+    first_digit, second_digit = split_digit(configuration_value)
+
+    for i in range(2):
+        draw_character(digit_list[first_digit], offset, local_hue=140, local_sat=0.9, local_val=200)
+        draw_character(digit_list[second_digit], offset+4, local_hue=140, local_sat=0.9, local_val=200)
+
+        if configuration_step == 1:
+            draw_character(digit_list[2], 0, local_hue=140, local_sat=0.9, local_val=200)
+            draw_character(digit_list[0], 4, local_hue=140, local_sat=0.9, local_val=200)
+        sleep(0.1)
+        clear_display()
+        sleep(0.05)
 
 # To toggle 24-hour clock      
 def toggle_24hour_mode():
@@ -719,7 +859,7 @@ def hsv_to_rgb(h, s, v):
 # To Cycle Through Modes  
 def cycle_current_mode():
     global current_mode
-    current_mode = (current_mode + 1) % 3
+    current_mode = (current_mode + 1) % 2
     clear_display()
 
     print('Mode: ' + str(current_mode))
@@ -745,13 +885,13 @@ def cycle_current_option(val):
     print('Option: ' + option_list[current_option])  
 
 # To cycle through visuals  
-def cycle_current_visual(val):
+def cycle_current_visual(val, reset=False):
     global current_visual
 
     current_visual = (current_visual + val) % len(visual_list)
 
-    if current_visual == -1:
-        current_visual = len(visual_list)
+    if reset == True:
+        current_visual = -1
 
     print('Visual: ' + visual_list[current_visual])  
 
@@ -760,37 +900,208 @@ def update_next_hue():
     global next_hue
     global next_sat
     
-    next_hue = theme_hue[get_palette_pos(format_hour(gmt_hr)[2]+1)]
-    next_sat = theme_sat[get_palette_pos(format_hour(gmt_hr)[2]+1)]
+    next_hue = theme_hue[get_palette_pos(format_hour(local_hr)[2]+1)]
+    next_sat = theme_sat[get_palette_pos(format_hour(local_hr)[2]+1)]
 
-# A -- Mode  
+# A -- Select  
 def callback_button_a(pin):
-    print('Mode')
-
-    d = check_debounce(pin)
-    if d == None:
-        return
-    elif not d:
-        cycle_current_mode()
-
-# B -- Select
-def callback_button_b(pin):
     print('Select')
-    d = check_debounce(pin)
 
+    d = check_debounce(pin)
     if d == None:
         return
     elif not d:
         # Quarter-Clock Mode
         if current_mode == 0:
-            pass
 
+            if current_visual == 3:
+                cycle_current_visual(1, reset=True)
+            else:
+                cycle_current_visual(1)
+
+            clear_display()
+
+        # Configuration Mode
+        elif current_mode == 100:
+            # Year
+            if configuration_step == 1:
+                draw_character(symbol_list[0], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[1], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=99, delta=1, offset=8)
+
+            # Month
+            if configuration_step == 2:
+                draw_character(symbol_list[0], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[1], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=12, minimum=1, delta=1)
+
+            # Day
+            if configuration_step == 3:
+                draw_character(symbol_list[0], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[1], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=31, minimum=1, delta=1)
+
+            # Hours
+            if configuration_step == 5:
+                draw_character(symbol_list[0], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[1], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=23, delta=1)
+
+            # Minutes
+            if configuration_step == 6:
+                draw_character(symbol_list[0], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[1], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=59, delta=1)
+
+            
+
+# B -- Options
+def callback_button_b(pin):
+    print('Options')
+
+    d = check_debounce(pin)
+    if d == None:
+        return
+    elif not d:
+        if current_visual < 0 and current_mode != 100:
+            cycle_current_mode()
+
+        if current_mode == 100:
+            # Year
+            if configuration_step == 1:
+                draw_character(symbol_list[1], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[0], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=99, delta=-1, offset=8)
+
+            # Month
+            if configuration_step == 2:
+                draw_character(symbol_list[1], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[0], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=12, minimum=1, delta=-1)
+
+            # Day
+            if configuration_step == 3:
+                draw_character(symbol_list[1], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[0], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=31, minimum=1, delta=-1)
+
+            # Hours
+            if configuration_step == 5:
+                draw_character(symbol_list[1], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[0], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=23, delta=-1)
+
+            # Minutes
+            if configuration_step == 6:
+                draw_character(symbol_list[1], 0, local_hue=140, local_sat=0.9, local_val=200)
+                draw_character(symbol_list[0], 0, local_hue=330, local_sat=1, local_val=150)
+                sleep(0.3)
+
+                clear_display()
+                change_configuration_value(maximum=59, delta=-1)
+        
+            
+# X -- Cycle Up        
+def callback_button_x(pin):
+    print('Cycle Up')
+
+    d = check_debounce(pin)
+    if d == None:
+        return
+    elif not d:
+
+        # To check if the button is held for 10 seconds
+        while picounicorn.is_pressed(picounicorn.BUTTON_X):
+            global configuration_increment
+            global configuration_step
+            configuration_increment += 1
+            sleep(0.1)
+
+            if configuration_increment > 100:
+                set_current_mode(100)
+                print('Configuration Mode')
+                break
+
+        # Quarter-Clock Mode
+        if current_mode == 0:
+            change_brightness(0.1)
+            soft_reset()
+        
         # Options Mode
         elif current_mode == 1:
+            clear_display(width=12, height=7)
+
+            # Draw over the carat with white temporarily
+            draw_character(symbol_list[6], 12, local_hue=0, local_sat=0, local_val=255)
+            sleep(0.25)
+            clear_display(width=12, height=7)
+
+            cycle_current_option(1)
+
+            #Redraw option name
+            draw_string(option_list[current_option], colored=False)
+
+        elif current_mode == 100:
+            # Restart the resetting process
+            if configuration_step == 7:
+                configuration_step = 0
+
+
+# Y -- Cycle Down
+def callback_button_y(pin):
+    print('Cycle Down')
+
+    d = check_debounce(pin)
+    if d == None:
+        return
+    elif not d:
+        # Quarter-Clock Mode
+        if current_mode == 0:
+            incr_palette()
+
+            if current_visual == 3:
+                sleep(0.3)
+                clear_display()
+        
+        # Options Mode
+        elif current_mode == 1:
+            clear_display(width=12, height=7)
+
+            # Draw over the carat with white temporarily
+            draw_character(symbol_list[5], 12, local_hue=0, local_sat=0, local_val=255)
+            sleep(0.25)
+            clear_display(width=12, height=7)
 
             # Hour (Option 0)
             if current_option == 0:
-                incr_hour_delta()
+                incr_hour()
                 blink_time()
 
             # Daylight Savings Time (Option 1)
@@ -836,73 +1147,12 @@ def callback_button_b(pin):
                 draw_string("DST")
             
             clear_display()
-        
-        # Visuals Mode
-        elif current_mode == 2:
-            cycle_current_visual(1)
-            clear_display()
-            
-# X -- Cycle Up        
-def callback_button_x(pin):
-    print('Cycle Up')
-
-    d = check_debounce(pin)
-    if d == None:
-        return
-    elif not d:
-        # Quarter-Clock Mode
-        if current_mode == 0:
-            change_brightness(0.1)
-            soft_reset()
-        
-        # Options Mode
-        elif current_mode == 1:
-            clear_display(width=12, height=7)
-
-            # Draw over the carat with white
-            draw_character(symbol_list[0], 12, local_hue=0, local_sat=0, local_val=255)
-            sleep(0.25)
-            clear_display(width=12, height=7)
-
-            cycle_current_option(1)
 
             #Redraw option name
             draw_string(option_list[current_option], colored=False)
 
-        # Vis Mode
-        elif current_mode == 2:
-            change_brightness(0.1)
-
-# Y -- Cycle Down
-def callback_button_y(pin):
-    print('Cycle Down')
-
-    d = check_debounce(pin)
-    if d == None:
-        return
-    elif not d:
-        # Quarter-Clock Mode
-        if current_mode == 0:
-            change_brightness(-0.1)
-            soft_reset()
-        
-        # Options Mode
-        elif current_mode == 1:
-            clear_display(width=12, height=7)
-
-            # Draw over the carat with white
-            draw_character(symbol_list[1], 12, local_hue=0, local_sat=0, local_val=255)
-            sleep(0.25)
-            clear_display(width=12, height=7)
-
-            cycle_current_option(-1)
-
-            #Redraw option name
-            draw_string(option_list[current_option], colored=False)
-
-        # Vis Mode
-        elif current_mode == 2:
-            change_brightness(-0.1)
+        elif current_mode == 100:
+            incr_configuration_step()
 
 # Prevent button presses from debouncing    
 def check_debounce(pin):
@@ -944,7 +1194,7 @@ while True:
     gc.collect()
     #print('Mem free: {} --- Mem allocated: {}'.format(gc.mem_free(), gc.mem_alloc()))
 
-    # Quarter-Clock Mode (Mode 0)
+    # Quarter-Clock (Mode 0)
     while current_mode == 0:
         # If Second Has Changed
         if gmt_sec != rtc.get_seconds():
@@ -956,15 +1206,14 @@ while True:
             if rtc.get_minutes() != gmt_min:
                 gmt_min = rtc.get_minutes()
             
-                # If Hour Has Changed  
-                if rtc.get_hours() != gmt_hr:
-                    gmt_hr = rtc.get_hours()
-                    
-                    check_dst()
-                    incr_hour_delta()
-                    hour_transition()
+            # If Hour Has Changed  
+            if rtc.get_hours() != local_hr:
+                local_hr = rtc.get_hours()
+                
+                check_dst()
+                hour_transition()
 
-            print(format_hour(gmt_hr)[2], gmt_min, gmt_sec)
+            print(format_hour(local_hr)[2], gmt_min, gmt_sec)
 
             draw_quarters()
             display_hours()
@@ -972,150 +1221,268 @@ while True:
             gc.collect()
         else:
             pass
-
         update_next_hue()
 
-        # x_val = list(range(0, 16))
-        # y_val = list(range(0,6))
+        # Visuals
+        while current_visual > -1:
+            clear_display()
 
-        
+            # To keep track of when the visual changes, for resetting purposes
+            vis_delta = current_visual
+
+            # Disco (Vis 0)
+            while current_visual == 0:
+                for i in range(32):
+
+                    # Left Side Colors
+                    if i < 16:
+                        pos = i
+                        hue = theme_hue[i]
+
+                    # Reversed For Right Side Colors
+                    else:
+                        pos = 31 - i
+                        hue = theme_hue[i - 16]
+                        
+                    r, g, b = convert_color(hue, 1.0, variable_brightness(220, 150))
+                    
+                    for x in range(display_width):
+                        for y in range(display_height):
+                            picounicorn.set_pixel(pos, y, r, g, b)
+                    sleep(1/34)
+                sleep(0.5)
+
+            if vis_delta != current_visual:
+                clear_display()
+                vis_delta = current_visual
+
+            # Matrix (Vis 1)
+            while current_visual == 1:
+                odds = [1,3,5,7,9,11,13,15]
+
+                for i in range(110):
+
+                    hue = theme_hue[(i*10)%23]
+                    sat = uniform(0.8, 1.0)
+                    val = variable_brightness(200, 160)
+
+                    r,g,b = convert_color(hue, sat, val)
+
+                    for x in range(display_width):
+                        for y in range(display_height):
+                            picounicorn.set_pixel(((i*10)%16), ((i*10)%7), r, g, b)
+                            picounicorn.set_pixel(odds[i%8], y, 0, 0, 0)
+
+            if vis_delta != current_visual:
+                clear_display()
+                vis_delta = current_visual
+
+            # Diag (Vis 2)
+            while current_visual == 2:
+                diagonal_increment += 1
+                
+                if diagonal_increment > 100000:
+                    diagonal_increment = 0
+
+                hue = theme_hue[diagonal_increment%23]
+                sat = uniform(0.8, 1.0)
+                val = variable_brightness(200, 160)
+
+                r,g,b = convert_color(hue, sat, val)
+
+                for x in range(display_width):
+                    for y in range(display_height):
+
+                        picounicorn.set_pixel(((diagonal_increment)%16), ((diagonal_increment)%7), r, g, b)
+            
+            if vis_delta != current_visual:
+                clear_display()
+                diagonal_increment = 0
+                vis_delta = current_visual
+
+            # Dots (Vis 3)
+            while current_visual == 3:
+
+                # Create array            
+                if dots_increment == -1:
+                    shuf_up = display_coordinates
+                    shuf_down = display_coordinates
+
+                    # Randomize the order of on/off 
+                    random_shuffle(shuf_up)
+                    random_shuffle(shuf_down)
+
+                    dots_coordinates = shuf_up + shuf_down
+
+                dots_increment += 1
+
+                if dots_increment == len(dots_coordinates):
+                    dots_increment = -1
+                    print('Reset Counter')    
+
+                hue = theme_hue[dots_increment%23]
+
+                # Lights on
+                if dots_increment < len(dots_coordinates)/2:
+                    sat = uniform(0.6, 1.0)
+                    val = randint(variable_brightness(30,15), variable_brightness(250, 200))
+
+                    # Fade/ramp the light up
+                    for i in reversed(range(1,10)):
+                        r,g,b = convert_color(hue, sat, (1/i)*val)
+                        picounicorn.set_pixel(dots_coordinates[dots_increment][0], dots_coordinates[dots_increment][1], r, g, b)
+                        sleep(0.03)
+
+                # Lights off
+                else:
+                    sat = uniform(0.4, 0.6)
+                    val = randint(variable_brightness(20,10), variable_brightness(60,40))
+
+                    r,g,b = convert_color(hue, sat, val)
+                    picounicorn.set_pixel(dots_coordinates[dots_increment][0], dots_coordinates[dots_increment][1], r, g, b)
+                    sleep(0.03)
+
+                sleep(randint(1,3)/12)
+
+            if vis_delta != current_visual:
+                clear_display()
+                dots_increment = -1
+                vis_delta = current_visual
     
     clear_display()
 
-    # Options Mode (Mode 1)
+    # Options (Mode 1)
     while current_mode == 1:
-        # TODO: Choose a Hue for these arrows to be permanently
-        draw_character(symbol_list[0], 12)
-        draw_character(symbol_list[1], 12)
+        draw_character(symbol_list[6], 12, local_hue=140, local_sat=0.9, local_val=200)
+        draw_character(symbol_list[5], 12, local_hue=330, local_sat=1, local_val=150)
         draw_string(option_list[current_option], colored=False)
         sleep(0.7)
 
     clear_display()
 
-    # Visuals Mode (Mode 2)
-    while current_mode == 2:
+    # Configuration (Mode 100)
+    while current_mode == 100:
+        global configuration_step
+        global configuration_value
 
-        # To keep track of when the visual changes, for resetting purposes
-        vis_delta = current_visual
+        blink_string("RSET")
+        clear_display()
+        draw_carats()
+        clear_display(width=14)
+        configuration_step = 0
+        configuration_value = 99
 
-        # Disco (Vis 0)
-        if current_visual == 0:
-            for i in range(32):
+        letter_list[5] = [
+        [0,0],[1,0],
+        [0,1],      
+        [0,2],      
+        [0,3],[1,3],
+        [0,4],      
+        [0,5],      
+        [0,6],[1,6],
+        ]
 
-                # Left Side Colors
-                if i < 16:
-                    pos = i
-                    hue = theme_hue[i]
+        # Step 0 - DATE
+        while configuration_step == 0:
+            draw_string("DATE", colored=False)
+            sleep(0.1)
 
-                # Reversed For Right Side Colors
-                else:
-                    pos = 31 - i
-                    hue = theme_hue[i - 16]
-                    
-                r, g, b = convert_color(hue, 1.0, variable_brightness(220, 100))
-                
-                for x in range(display_width):
-                    for y in range(display_height):
-                        picounicorn.set_pixel(pos, y, r, g, b)
-                sleep(1/34)
-            sleep(0.5)
+        clear_display()
 
-        if vis_delta != current_visual:
-            clear_display()
-            vis_delta = current_visual
+        # Step 1 (set year)
+        while configuration_step == 1:
+            draw_carats()
 
-        # Matrix (Vis 1)
-        if current_visual == 1:
-            odds = [1,3,5,7,9,11,13,15]
+            draw_string("YR", offset=3, colored=False)
+            sleep(0.1)
 
-            for i in range(110):
+        reset_year = configuration_value
+        configuration_value = 12
+        clear_display()
 
-                hue = theme_hue[(i*10)%23]
-                sat = uniform(0.8, 1.0)
-                val = 200
+        letter_list[5] = [
+        [0,0],[1,0],[2,0],
+        [0,1],      
+        [0,2],      
+        [0,3],[1,3],[2,3],
+        [0,4],      
+        [0,5],      
+        [0,6],[1,6],[2,6]
+        ]
 
-                r,g,b = convert_color(hue, sat, val)
+        # Step 2 (set month)
+        while configuration_step == 2:
+            draw_carats()
 
-                for x in range(display_width):
-                    for y in range(display_height):
-                        picounicorn.set_pixel(((i*10)%16), ((i*10)%7), r, g, b)
-                        picounicorn.set_pixel(odds[i%8], y, 0, 0, 0)
+            draw_string("M", offset=3, colored=False)
+            draw_string("O", offset=9, colored=False)
+            sleep(0.1)
 
-        if vis_delta != current_visual:
-            clear_display()
-            vis_delta = current_visual
+        reset_month = configuration_value
+        configuration_value = 31
+        clear_display()
 
-        # Diag (Vis 2)
-        if current_visual == 2:
-            diagonal_increment += 1
+        # Step 3 (set day)
+        while configuration_step == 3:
+            draw_carats()
+
+            draw_string("DAY", offset=3, colored=False)
+            sleep(0.1)
+
+        reset_day = configuration_value
+        configuration_value = 23
+        clear_display()
+        draw_carats()
+        clear_display(width=14)
+
+        # Step 4 - TIME
+        while configuration_step == 4:
+            draw_string("TM", colored=False)
+            draw_string("E", offset=10, colored=False)
+            sleep(0.1)
+
+        clear_display()
+
+        # Step 5 (set hour)
+        while configuration_step == 5:
+            draw_carats()
             
-            if diagonal_increment > 100000:
-                diagonal_increment = 0
+            draw_string("HUR", offset=3, colored=False)
+            sleep(0.1)
 
-            hue = theme_hue[diagonal_increment%23]
-            sat = uniform(0.8, 1.0)
-            val = 200
+        reset_hour = configuration_value
+        configuration_value = 59
+        clear_display()
 
-            r,g,b = convert_color(hue, sat, val)
+        # Step 6 (set min)
+        while configuration_step == 6:
+            draw_carats()
 
-            for x in range(display_width):
-                for y in range(display_height):
+            draw_string("M", offset=3, colored=False)
+            draw_string("I", offset=9, colored=False)
+            draw_string("N", offset=11, colored=False)
+            sleep(0.1)
 
-                    picounicorn.set_pixel(((diagonal_increment)%16), ((diagonal_increment)%7), r, g, b)
+        reset_minute = configuration_value
+        reset_second = 0
+        configuration_value = 0
+        clear_display()
+        draw_carats()
+        clear_display(width=14)
+
+        # Step 7 (confirm)
+        while configuration_step == 7:
+            draw_string("OK", colored=False)
+            draw_character(symbol_list[4], 8, local_hue=0, local_sat=0, local_val=255)
+            draw_character(symbol_list[2], 13, local_hue=140, local_sat=0.9, local_val=200)
+            draw_character(symbol_list[3], 13, local_hue=10, local_sat=1, local_val=150)
+            sleep(0.1)
         
-        if vis_delta != current_visual:
-            clear_display()
-            diagonal_increment = 0
-            vis_delta = current_visual
+        # Write new date/time
+        if configuration_step == 8:
+            date_time = (2000+reset_year, reset_month, reset_day, reset_hour, reset_minute, reset_second)
+            rtc.set_rtc_date_time(date_time)
+            print(date_time)
+            blink_string("SET")
 
-        # Dots (Vis 3)
-        if current_visual == 3:
-
-            # Create array            
-            if dots_increment == -1:
-                shuf_up = display_coordinates
-                shuf_down = display_coordinates
-
-                # Randomize the order of on/off 
-                random_shuffle(shuf_up)
-                random_shuffle(shuf_down)
-
-                dots_coordinates = shuf_up + shuf_down
-
-            dots_increment += 1
-
-            if dots_increment == len(dots_coordinates):
-                dots_increment = -1
-                print('Reset Counter')    
-
-            hue = theme_hue[dots_increment%23]
-
-            # Lights on
-            if dots_increment < len(dots_coordinates)/2:
-                sat = uniform(0.6, 1.0)
-                val = randint(15, 250)
-
-                # Fade/ramp the light up
-                for i in reversed(range(1,10)):
-                    r,g,b = convert_color(hue, sat, (1/i)*val)
-                    picounicorn.set_pixel(dots_coordinates[dots_increment][0], dots_coordinates[dots_increment][1], r, g, b)
-                    sleep(0.03)
-
-            # Lights off
-            else:
-                sat = uniform(0.4, 0.6)
-                val = randint(15, 40)
-
-                r,g,b = convert_color(hue, sat, val)
-                picounicorn.set_pixel(dots_coordinates[dots_increment][0], dots_coordinates[dots_increment][1], r, g, b)
-                sleep(0.03)
-
-            sleep(randint(1,3)/12)
-
-        if vis_delta != current_visual:
-            clear_display()
-            dots_increment = -1
-            vis_delta = current_visual
-        
-    soft_reset()
-            
+            set_current_mode(0)
