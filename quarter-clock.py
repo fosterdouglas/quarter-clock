@@ -903,9 +903,9 @@ def update_next_hue():
     next_hue = theme_hue[get_palette_pos(format_hour(local_hr)[2]+1)]
     next_sat = theme_sat[get_palette_pos(format_hour(local_hr)[2]+1)]
 
-# A -- Select  
+# A -- Visualizations  
 def callback_button_a(pin):
-    print('Select')
+    print('Visualizations')
 
     d = check_debounce(pin)
     if d == None:
@@ -968,8 +968,6 @@ def callback_button_a(pin):
                 clear_display()
                 change_configuration_value(maximum=59, delta=1)
 
-            
-
 # B -- Options
 def callback_button_b(pin):
     print('Options')
@@ -1026,11 +1024,10 @@ def callback_button_b(pin):
 
                 clear_display()
                 change_configuration_value(maximum=59, delta=-1)
-        
             
-# X -- Cycle Up        
+# X -- Brightness / Switch Option      
 def callback_button_x(pin):
-    print('Cycle Up')
+    print('Brightness / Switch Option')
 
     d = check_debounce(pin)
     if d == None:
@@ -1073,10 +1070,9 @@ def callback_button_x(pin):
             if configuration_step == 7:
                 configuration_step = 0
 
-
-# Y -- Cycle Down
+# Y -- Color Theme / Edit Option
 def callback_button_y(pin):
-    print('Cycle Down')
+    print('Color Theme / Edit Option')
 
     d = check_debounce(pin)
     if d == None:
