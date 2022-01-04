@@ -548,7 +548,7 @@ def showcase_palette():
         for x in range(8, display_width):
             for y in range(display_height):
                 picounicorn.set_pixel(x, y, *convert_color(theme_hue[get_palette_pos(i+1)], theme_sat[get_palette_pos(i+1)], global_brt*255))
-        sleep(0.4)
+        sleep(0.25)
     
 def format_hour(hour):
     # function to adjust global time to local time, considering user adjusted hours
