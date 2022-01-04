@@ -58,13 +58,13 @@ The Quarter-Clock will need its date/time set once when first plugging it in, an
 Note: the following values are not actually set until the end of the process when given to option to confirm or restart the process. Keep this in mind when setting the *minute* value specifically, if the goal is to set it precisely. 
 
 To start, set the date (these values are important for the Quarter-Clock to keep track of leap years and month/days, which is used for Automatic DST):
-    - YR - the **current year** in a two-digit format of 20XX, from 00 - 99
-    - MO - the **current month** from 01 - 12 (January - December)
-    - DAY - the **current day** from 01 - 31
+- YR - the **current year** in a two-digit format of 20XX, from 00 - 99
+- MO - the **current month** from 01 - 12 (January - December)
+- DAY - the **current day** from 01 - 31
 
 Next, set the time:
-    - HOR - the **current hour** which should be set to the local time zone hour, from 00 - 23 (Midnight - 11PM)
-    - MIN - the **current minute** which should be set to the local time zone minute, from 00 - 59
+- HOR - the **current hour** which should be set to the local time zone hour, from 00 - 23 (Midnight - 11PM)
+- MIN - the **current minute** which should be set to the local time zone minute, from 00 - 59
 
 On the final step, use the *Y* button to confirm, or the *X* button to restart the reset process.
 
