@@ -2,9 +2,9 @@
 
 ![Prototype Image](/media/prototype.jpg "Prototype Image")
 
-This project uses an adapted library for the [RV3028 Real-Time Clock (RTC)](https://shop.pimoroni.com/products/rv3028-real-time-clock-rtc-breakout), found at this https://github.com/x10dit/rv3028_rtc GitHub repo.
+This project uses a [RV3028 Real-Time Clock (RTC)](https://shop.pimoroni.com/products/rv3028-real-time-clock-rtc-breakout), and an adapted library for MicroPython found at this [GitHub repo](https://github.com/x10dit/rv3028_rtc).
 
-It also uses [Pimoroni's](https://shop.pimoroni.com) custom Pico firmware v0.X.X, which uses MicroPython v1.16, found here: https://github.com/pimoroni/pimoroni-pico.
+It also uses [Pimoroni's](https://shop.pimoroni.com) custom [Pico firmware](https://github.com/pimoroni/pimoroni-pico) v0.X.X, which uses MicroPython v1.16.
 
 ## A -- Visualizations
 
