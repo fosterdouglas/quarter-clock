@@ -10,7 +10,9 @@ This project is put together with this hardware:
 
 And this software:
 - [Pimoroni's](https://shop.pimoroni.com) custom [Pico firmware](https://github.com/pimoroni/pimoroni-pico) v0.X.X, which uses MicroPython v1.16
-- For the RV3028, an adapted MicroLibrary library for MicroPython found at this [GitHub repo](https://github.com/x10dit/rv3028_rtc)
+- An adapted RV3028 library for MicroPython found at this [GitHub repo](https://github.com/x10dit/rv3028_rtc)
+
+To control the Quarter-Clock:
 
 ## A -- Visualizations
 
@@ -39,19 +41,19 @@ In Options mode, changes the option's current setting.
 - HOR (Hour Adjustment):
     - Changes the displaying hour
 - DST (Automatic Daylight Savings Time): 
-    - When enabled, Quarter-Clock will **automatically** adjust its time forward 1 hour between Mar 13 and Nov 6
-    - Default: Auto
+    - When **Auto**, Quarter-Clock will **automatically** adjust its time forward 1 hour between Mar 13 and Nov 6
+    - Default: **Auto**
 - BRT (Automatic Brightness):
-    - When enabled, Quarter-Clock will automatically adjust its display brightness to the ambient light
-    - Adjusting the brightness manually will also set this to OFF
-    - Default: On 
+    - When **Auto**, Quarter-Clock will automatically adjust its display brightness to the ambient light
+    - Adjusting the brightness manually at any time will set this to **Off**
+    - Default: **Auto** 
 - COL (Color Theme):
     - Changes the current color theme (Rainbow / Ocean / Fire+Ice)
-    - When selected, Quarter-Clock will quickly cycle throguh 24 hours to demonstate the selected color theme
-    - Default: Rainbow
+    - Quarter-Clock will quickly cycle throguh 24 hours to demonstate the selected color theme
+    - Default: **Rainbow**
 - 24H (12/24 Display Style):
-    - Enables or disables the 24H time display style
-    - DEfault: On
+    - Changes the 24-hour time display style
+    - Default: **On**
 
 ## Resetting the date/time of Quarter-Clock:
 The Quarter-Clock will need its date/time set once when first plugging it in, and it may need it reset if the battery dies. To enter the configuration mode:
@@ -86,7 +88,7 @@ Alternatively, to change the battery:
 - Close the Quarter-Clock case
 - Plug in the Quarter-Clock, and use the steps above to reset the date and time, which will now be properly stored in memory if there's power missing
 
-## Development note:
+## Development notes:
 - This project was developed as the maker's first use of Python (and MicroPython)
 - Most of the code is not remotely optimized, although it is performant running on a Raspberry Pi Pico
 - Some aspects of the software will still be iterated on, in particular the design of the "Quaters" display, and the visualizations
