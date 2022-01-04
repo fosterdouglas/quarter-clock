@@ -1,26 +1,28 @@
-# Quarter-Clock 
+# Quarter-Clock
 
-This project uses an adapted library for the RV3028 RTC, found at this https://github.com/x10dit/rv3028_rtc GitHub repo.
+![Prototype Image](/media/prototype.jpg "Prototype Image")
 
-It also uses Pimoroni's custom Pico firmware v0.X.X, which uses MicroPython v1.16, found here: https://github.com/pimoroni/pimoroni-pico.
+This project uses an adapted library for the [RV3028 Real-Time Clock (RTC)](https://shop.pimoroni.com/products/rv3028-real-time-clock-rtc-breakout), found at this https://github.com/x10dit/rv3028_rtc GitHub repo.
 
-## A -- Select
+It also uses [Pimoroni's](https://shop.pimoroni.com) custom Pico firmware v0.X.X, which uses MicroPython v1.16, found here: https://github.com/pimoroni/pimoroni-pico.
 
-In Quarter-Clock mode, cycles through different visualizations.
+## A -- Visualizations
+
+In Quarter-Clock mode, changes to different visualizations.
 
 ## B -- Options
 
-In Quarter-Clock mode, toggles in and out of the options mode.
+In Quarter-Clock mode, changes in and out of the options mode.
 
-(If a visualization is displaying, this will instead interact with or modify it)
+(If a visualization is displaying, this will instead interact with it)
 
-## X -- Brightness/Cycle Option
+## X -- Brightness / Switch Option
 
 In Quarter-Clock mode, changes brightness level.
 
 In Options mode, cycles to the next option.
 
-## Y -- Color/Change Option
+## Y -- Color Theme / Edit Option
 
 In Quarter-Clock mode, changes the color theme.
 
@@ -46,14 +48,24 @@ In Options mode, changes the option's current setting.
     - Enables or disables the 24H time display style
     - DEfault: On
 
-## Resetting the Quarter-Clock:
+## Resetting the date and time of Quarter-Clock:
 [ soon ]
+
+## The RTC battery
+If the small battery inside of the RTC chip dies (and it someday will), the Quarter-Clock will continue to function normally although it will *not retain its set time if it's unplugged*. In this case, use the instructions above to reset the date and time each time its unplugged.
+
+Alternatively, to change the battery:
+
+- Get a new [337 style battery](https://www.amazon.com/Energizer-337-Button-Cell-Battery/dp/B001C1FZ6K)
+- Open the Quarter-Clock case
+- Remove the battery from the external chip labelled "RV3028" (a tweezers works well, pushing it out from the back)
+- Replace the new battery, ensuring the proper polarity is facing downward
+- Close the Quarter-Clock case
+- Plug in the Quarter-Clock, and use the steps above to reset the date and time, which will now be properly stored in memory if there's power missing
 
 ## Notes:
 [ soon ]
 
 ## TODO:
 
-- Figure out error handling for battery dying? like, if rtc HAS no value when it starts up, it needs the run the one time setting up
 - Write README description  
-- Add interaction to visuals 
