@@ -2,9 +2,15 @@
 
 ![Prototype Image](/media/prototype.jpg "Prototype Image")
 
-This project uses a [RV3028 Real-Time Clock (RTC)](https://shop.pimoroni.com/products/rv3028-real-time-clock-rtc-breakout), and an adapted library for MicroPython found at this [GitHub repo](https://github.com/x10dit/rv3028_rtc).
+This project is put together with this hardware: 
+- [Raspberry Pi Pico](https://shop.pimoroni.com/products/raspberry-pi-pico?variant=32402092294227)
+- [Pico Unicorn Pack](https://shop.pimoroni.com/products/pico-unicorn-pack)
+- [RV3028 Real-Time Clock (RTC)](https://shop.pimoroni.com/products/rv3028-real-time-clock-rtc-breakout)
+- [TEMT6000 Light Sensor](https://www.amazon.com/HiLetgo-TEMT6000-Sensor-Professional-Arduino/dp/B07WDW9BHD/ref=sr_1_3?crid=UP8D28EVTBIA&keywords=temt6000&qid=1641287814&sprefix=temt600%2Caps%2C323&sr=8-3)
 
-It also uses [Pimoroni's](https://shop.pimoroni.com) custom [Pico firmware](https://github.com/pimoroni/pimoroni-pico) v0.X.X, which uses MicroPython v1.16.
+And this software:
+- [Pimoroni's](https://shop.pimoroni.com) custom [Pico firmware](https://github.com/pimoroni/pimoroni-pico) v0.X.X, which uses MicroPython v1.16
+- For the RV3028, an adapted MicroLibrary library for MicroPython found at this [GitHub repo](https://github.com/x10dit/rv3028_rtc)
 
 ## A -- Visualizations
 
