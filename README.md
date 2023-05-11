@@ -102,4 +102,4 @@ Alternatively, to change the battery:
 
 - This project was developed as the maker's first use of Python (and MicroPython)
 - Most of the code is not remotely optimized, although it is performant running on a Raspberry Pi Pico
-- Some aspects of the software will still be iterated on, in particular the design of the "Quaters" display, and the visualizations
+- Some aspects of the software will still be iterated on, in particular the design of the "Quarters" display, and the visualizations
