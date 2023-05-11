@@ -4,6 +4,8 @@
 
 ![Prototype Image](/media/beta.jpeg "Beta Image")
 
+(prototype and alpha build images above)
+
 This project is put together with this hardware:
 
 - [Raspberry Pi Pico](https://shop.pimoroni.com/products/raspberry-pi-pico?variant=32402092294227)
